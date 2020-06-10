@@ -26,6 +26,8 @@ Column metadata:
  $ N_percent      : measured percent nitrogen in muscle sample, num
  
  Chagos_birds_rats_UVC_data_2018_2019.csv - contains underwater visual census data for all parrotfish counted in 2018 and 2019. 
+ 
+Column metadata:
  $ Year       : year of survey, most islands in 2018 but Eagle in 2019, int
  $ Atoll      : atoll where survey conducted, Factor w/ 3 levels 
  $ Island     : island where survey conducted, Factor w/ 10 levels (10 instead of 11 because no parrotfish observed around South Brother)
