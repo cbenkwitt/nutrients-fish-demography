@@ -4,6 +4,7 @@ Data and code for "Nutrient subsidies alter demographic trade-offs between growt
 Contains all data (.csv and .Rdata files), scripts for analysis (.R and .Rmd files), and Bayesian models (.Rds files). 
 
 Metadata for csv data files:
+
 C_sordidus_used_data_clean.csv - contains individual-level data for all female Chlorurus sordidus (n = 116) from lagoon-side of rat-free versus rat-infested islands, collected March 2019.
 
 Column metadata:
