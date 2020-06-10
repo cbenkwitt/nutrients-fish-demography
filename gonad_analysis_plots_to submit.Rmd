@@ -1,0 +1,730 @@
+---
+title: "R Notebook: C. sordidus length-weight-gonad analyses"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+#Load packages
+```{r}
+library(tidyverse)
+library(brms)
+library(tidybayes)
+library(modelr) #for data_grid function
+library(bayesplot)
+library(gridExtra) #for plots
+library(RColorBrewer) #for plots
+library(cowplot) #for plots
+library(scales) #for plots
+```
+
+
+#Load data
+```{r}
+load("cso_data.Rdata")
+
+##want to use lagoon, female, stage 3 only file:
+head(cso_dat_lfm)
+str(cso_dat_lfm)
+
+##center length
+cso_dat_lfm <- 
+  cso_dat_lfm %>%
+  mutate(c_length = fork_length_cm - mean(fork_length_cm))
+
+##center age
+cso_dat_lfm <- 
+  cso_dat_lfm %>%
+  mutate(c_age = age_final - mean(age_final))
+
+#log variables
+cso_dat_lfm$lgonad_wt<-log(cso_dat_lfm$gonad.weight_g) 
+cso_dat_lfm$llength<-log(cso_dat_lfm$fork_length_cm) 
+cso_dat_lfm$lweight<-log(cso_dat_lfm$whole_wt_kg) 
+
+##center llength
+cso_dat_lfm <- 
+  cso_dat_lfm %>%
+  mutate(c_llength = llength - mean(llength))
+
+#convert whole weight estiamtes to grams, because fishbase a, b parameters in cm and grams, so change our units to make comparable
+cso_dat_lfm$whole_wt_g<-cso_dat_lfm$whole_wt_kg*1000 ###multiply by 1000
+cso_dat_lfm$lweight_g<-log(cso_dat_lfm$whole_wt_g)
+
+
+##re-level to make ratty the reference level
+cso_dat_lfm$treatment_b<-relevel(cso_dat_lfm$treatment, "ratty")
+
+```
+
+
+
+#Final models (earlier versions built up models slowly, compared distributions for best fit, compared different priors, etc. - all came to same conclusions)
+#Fecundity ~ Length
+```{r}
+
+gw_length_mod <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      gonad.weight_g  ~ c_length+treatment_b + (1|atoll),
+      prior = c(prior(normal(2,10), class = Intercept), ###weakly informative prior
+                prior(lognormal(0, 1), class = "b", coef = "c_length"), #this has to be above 0 (positive relationship between gonad weight-length)
+                prior(normal(0, 10), class = "b", coef = "treatment_bbirdy")), #weakly informative prior
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "gw_length_mod")
+print(gw_length_mod)
+plot(gw_length_mod)
+pp_check(gw_length_mod)
+##all looks good
+prior_summary(gw_length_mod)
+
+#check plots of priors and posterior versus prior distributions: 
+gw_length_mod %>% 
+  prior_summary() %>% #don't need this line when plotting priors before running the model
+  mutate(label = pmap_chr(select(., -prior), paste)) %>% 
+  parse_dist(prior) %>% 
+  ggplot(aes(y = 0, dist = .dist, args = .args)) + 
+  stat_dist_halfeyeh() + 
+  geom_text(aes(label = prior), x = 0, y = .97) + 
+  facet_wrap(~ label, scales = "free_x")
+
+#intercept:
+posterior_samples(gw_length_mod) %>% 
+  select(b_Intercept, prior_Intercept) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+#pretty close match....
+
+#slope (length):
+posterior_samples(gw_length_mod) %>% 
+  select(b_c_length, prior_b_c_length) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope (rat):
+posterior_samples(gw_length_mod) %>% 
+  select(b_treatment_bbirdy, prior_b_treatment_bbirdy) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+
+#Compile posterior distributions:
+gw_length_post <- posterior_samples(gw_length_mod)
+median_hdi(gw_length_post$b_treatment_bbirdy, .width = .95) #median estimate = -0.59, ymin - -0.95, ymax = -0.23
+
+#test hypothesis that birdy effect is > 0
+hypothesis(gw_length_mod, "treatment_bbirdy>0") #evidence ratio, posterior probability = 0 that birdy > ratty.
+hypothesis(gw_length_mod, "treatment_bbirdy<0") #So posterior probability = 1 that ratty > birdy (evidence ratio = 726.27)
+
+
+##percent difference
+(-.59)/((2.48+2.48-.59)/2) ###27%
+
+```
+
+#Weight-Length
+```{r}
+#model as log-log for power model, when log(weight)~log(length), intercept = a, slope coefficient = b in W = aL^b (good description in  http://derekogle.com/fishR/examples/oldFishRVignettes/LengthWeight.pdf)
+###w-l from fishbase for C. sordidus: Bayesian length-weight: a=0.01549 (0.01269 - 0.01890), b=3.06 (3.01 - 3.11), in cm Total Length, based on LWR estimates for this species (Ref. 93245).
+###matches other published C. sordidus estiamtes (e.g., Ali et al. 2010 - Red Sea, IP - 0.0316*L^2.9553; Kamikawa et al. 2015 - Guam - 0.02*L^3.04)
+##so we, expect (in log-log model), intercept < 0 (because a <<< 1), and b > 0 (should be ~3)
+
+lw_mod_ll_int<-
+brm(data = cso_dat_lfm, family = gaussian,
+      lweight_g  ~ llength * treatment_b + (1|atoll),
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      prior = c(prior(normal(-10, 10), class = Intercept), ##expect it to be <0, but allow to vary
+                prior(lognormal(0, 1), class = "b", coef = "llength"), ##constrained to stay above 0 because b is always positive
+                prior(normal(0, 1), class = "b", coef = "treatment_bbirdy")), # only weakly informative (only need sd = 1 because log-log model, so multiplicative)
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "lw_mod_ll_int")
+print(lw_mod_ll_int)
+plot(lw_mod_ll_int, ask = FALSE)
+pp_check(lw_mod_ll_int)
+#all looks good
+prior_summary(lw_mod_ll_int)
+
+
+#check plots of priors and posterior versus prior distributions: 
+lw_mod_ll_int %>% 
+  prior_summary() %>% #don't need this line when plotting priors before running the model
+  mutate(label = pmap_chr(select(., -prior), paste)) %>% 
+  parse_dist(prior) %>% 
+  ggplot(aes(y = 0, dist = .dist, args = .args)) + 
+  stat_dist_halfeyeh() + 
+  geom_text(aes(label = prior), x = 0, y = .97) + 
+  facet_wrap(~ label, scales = "free_x")
+
+#intercept:
+posterior_samples(lw_mod_ll_int) %>% 
+  select(b_Intercept, prior_Intercept) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope (length):
+posterior_samples(lw_mod_ll_int) %>% 
+  select(b_llength, prior_b_llength) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope (rat):
+posterior_samples(lw_mod_ll_int) %>% 
+  select(b_treatment_bbirdy, prior_b_treatment_bbirdy) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+
+#Compile posterior distributions:
+lw_post <- posterior_samples(lw_mod_ll_int)
+median_hdi(lw_post$`b_llength:treatment_bbirdy`, .width = .95) #
+median_hdi(lw_post$b_treatment_bbirdy, .width = .95) #
+median_hdi(lw_post$b_Intercept, .width = .95) #
+median_hdi(lw_post$b_llength, .width = .95) #
+exp(-1.351138	)
+exp(-2.171899	)
+exp(-0.5716991)
+
+
+
+#test hypothesis that birdy effect is > 0
+hypothesis(lw_mod_ll_int, "treatment_bbirdy + Intercept > Intercept") #posterior probability = 0 , evidence ratio = 0 that birdy a > ratty a
+hypothesis(lw_mod_ll_int, "treatment_bbirdy + Intercept < Intercept") #so reverse (ratty a> birdy a) posterior prob = 1, evidence ratio = 1599
+hypothesis(lw_mod_ll_int, "treatment_bbirdy  < 0") #equivalent to line above
+
+
+hypothesis(lw_mod_ll_int, "llength + `llength:treatment_bbirdy` > llength") #evidence ratio = 999, posterior probability = 1 that birdy b > ratty b
+hypothesis(lw_mod_ll_int, "`llength:treatment_bbirdy` > 0") #equivalent to line above
+
+```
+
+##Plots of posterior distributions
+```{r}
+#length-weight: lw_post, lw_mod_ll_int
+#length-gonad: gw_length_post, gw_length_mod
+#age-gonad:  gw_age_post, gw_age_mod2
+
+##plot of birdy treatment effect
+
+
+##length-gonad
+gwl_post_plot<-
+gw_length_mod %>%
+  spread_draws(b_treatment_bbirdy) %>%
+  ggplot(aes(y = 0, x = b_treatment_bbirdy, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Gonad weight")+ 
+  ylab("") +
+  scale_y_continuous(NULL, breaks = NULL) +
+ # scale_x_continuous(limits=c(-1.4, 0.25), breaks=seq(-1.4, 0.2, .2), labels = scales::number_format(accuracy = 0.1))+
+  scale_x_continuous(limits=c(-1.5, .2), breaks=seq(-1.5, .2,.5), labels = scales::number_format(accuracy = 0.1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+gwl_post_plot
+
+
+
+##length-weight: a
+lwa_post_plot<-
+lw_mod_ll_int %>%
+  spread_draws(b_treatment_bbirdy, b_Intercept) %>%
+  mutate(exp_birdy = exp(b_Intercept + b_treatment_bbirdy) - exp(b_Intercept))  %>% ##back transform to get difference between birdy and ratty a on original scale
+  ggplot(aes(y = 0, x = exp_birdy, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("a")+ 
+  ylab("") +
+  scale_y_continuous(NULL, breaks = NULL) +
+  scale_x_continuous(limits=c(-.2, .05), breaks=seq(-.2, 0, .1), labels = scales::number_format(accuracy = 0.1))+
+   theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+lwa_post_plot
+
+
+##length-weight: b
+lwb_post_plot<-
+lw_mod_ll_int %>%
+  spread_draws(`b_llength:treatment_bbirdy`) %>%
+  mutate(birdy_b = `b_llength:treatment_bbirdy`)  %>% #add column name so can plot (b/c : doesn't work in ggplot command)
+  ggplot(aes(y = 0, x = birdy_b, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("b")+ 
+  ylab("") +
+  scale_y_continuous(NULL, breaks = NULL) +
+  scale_x_continuous(limits=c(-.15, .95), breaks=seq(0, .8,.4), labels = scales::number_format(accuracy = 0.1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+lwb_post_plot
+
+
+lwab_post_plot<-
+  lw_mod_ll_int %>%
+  spread_draws(b_treatment_bbirdy, b_Intercept, `b_llength:treatment_bbirdy`) %>%
+  mutate(birdy_b = `b_llength:treatment_bbirdy`,
+          exp_birdy = exp(b_Intercept + b_treatment_bbirdy) - exp(b_Intercept))  %>% ##back transform to get difference between birdy and ratty a on original scale)
+  ggplot(aes(y = 0, x = birdy_b, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
+  stat_halfeyeh(aes(x=exp_birdy), point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Length-weight coefficients")+ 
+  ylab("") +
+  scale_y_continuous(NULL, breaks = NULL) +
+  scale_x_continuous(limits=c(-.2, 1), breaks=seq(-.2, 1,.2), labels = scales::number_format(accuracy = 0.1))+
+   theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+lwab_post_plot
+
+##I think keep them separate...
+
+
+##Try combining all post plots:
+lwa_tab<-
+lw_mod_ll_int %>%
+  spread_draws(b_treatment_bbirdy, b_Intercept, `b_llength:treatment_bbirdy`) %>%
+  mutate(birdy_b_lw = `b_llength:treatment_bbirdy`,
+          exp_birdy_lw = exp(b_Intercept + b_treatment_bbirdy) - exp(b_Intercept),
+         model = "2_lwa")
+
+lwb_tab<-
+lw_mod_ll_int %>%
+  spread_draws(b_treatment_bbirdy, b_Intercept, `b_llength:treatment_bbirdy`) %>%
+  mutate(birdy_b_lw = `b_llength:treatment_bbirdy`,
+          exp_birdy_lw = exp(b_Intercept + b_treatment_bbirdy) - exp(b_Intercept),
+         model = "1_lwb")
+
+gwl_tab<-
+gw_length_mod %>%
+  spread_draws(b_treatment_bbirdy) %>%
+  mutate(model = "3_gwl")
+
+vbgf_tab<-
+vbgf_mod %>%
+  spread_draws(b_K1_Intercept)  %>%
+  mutate(model = "4_vbgf")
+
+
+#post_tab<-
+#  cbind(lw_tab, gwl_tab, vbgf_tab)
+#post_tab
+
+
+
+  ggplot(data = lwa_tab, aes(y = model, x = birdy_b_lw, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
+  stat_halfeyeh(data = lwb_tab, aes(x=exp_birdy_lw), point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
+  stat_halfeyeh(data = gwl_tab, aes(x=b_treatment_bbirdy), point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
+  stat_halfeyeh(data = vbgf_tab,aes(x=b_K1_Intercept), point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Response")+ 
+  ylab("") +
+ # scale_y_continuous(NULL, breaks = NULL) +
+ # scale_x_continuous(limits=c(-.2, 1), breaks=seq(-.2, 1,.2), labels = scales::number_format(accuracy = 0.1))+
+   theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+
+```
+
+
+##Plots - now with raw data and estimated regression lines
+```{r}
+
+###gw-length
+gw_length_plot<-
+cso_dat_lfm %>%
+  group_by(treatment_b) %>%
+  add_fitted_draws(gw_length_mod, re_formula=NA) %>% #re_formula = NA to deal with random effects
+  ggplot(aes(x = fork_length_cm, y = gonad.weight_g, color = treatment_b, fill = treatment_b,  alpha = 0.6)) +
+  geom_point(data = cso_dat_lfm, size = 3, aes(shape = ordered(treatment_b)))+
+  stat_lineribbon(aes(y = .value), .width=0) +
+  scale_fill_manual(values = c( "#DC3220","#005AB5")) + 
+  scale_color_manual(values = c("#DC3220", "#005AB5")) +   
+  scale_shape_manual(values = c(23,21)) + 
+  theme_bw() + 
+  xlab("Length (cm)")+
+  ylab("Gonad weight (g)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+gw_length_plot
+
+
+
+###l-w
+lw_plot<-
+cso_dat_lfm %>%
+  group_by(treatment_b) %>%
+  add_fitted_draws(lw_mod_ll_int, re_formula=NA) %>% #re_formula = NA to deal with random effects
+  ggplot(aes(x = fork_length_cm, y = whole_wt_g, color = treatment_b, fill = treatment_b,  alpha = 0.6)) +
+  geom_point(data = cso_dat_lfm, size = 3, aes(shape = ordered(treatment_b)))+
+  stat_lineribbon(aes(y = exp(.value)), .width=0) +
+   scale_fill_manual(values = c( "#DC3220","#005AB5")) + 
+  scale_color_manual(values = c("#DC3220", "#005AB5")) +   
+  scale_shape_manual(values = c(23,21)) + 
+  theme_bw() + 
+  xlab("Length (cm)")+
+  ylab("Whole weight (g)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+lw_plot
+
+```
+
+##Combine plots
+```{r}
+
+gwl_comb_plot <-
+  ggdraw() + 
+  draw_plot(gw_length_plot, x = 0, y = 0, width = 0.5, height = 1) +
+  draw_plot(gwl_post_plot,  x = 0.5, y = 0, width = 0.5, height = 1) 
+gwl_comb_plot
+
+
+lw_comb_plot <-
+  ggdraw() +
+  draw_plot(lw_plot, x = 0, y = 0, height = 1, width = 0.5) +
+  draw_plot(lwa_post_plot, x= .5, y = 0, width = .25, height = 1)+ 
+  draw_plot(lwb_post_plot, x= 0.75, y = 0, width = .25, height = 1)
+lw_comb_plot
+
+
+
+
+###OLD:
+###gonad weight - length
+gwl_comb_plot <-
+  ggdraw() +
+  draw_plot(gw_length_plot) +
+  draw_plot(gwl_post_plot, x= 0.16, y = 0.65, width = .35, height = .35)
+
+gwl_comb_plot
+gwl_comb_plot <-
+  plot_grid(gw_length_plot, gwl_post_plot, ncol = 2, align = "hv")
+gwl_comb_plot
+
+
+###length-weight
+lw_comb_plot <-
+  ggdraw() +
+  draw_plot(lw_plot) +
+  draw_plot(lwa_post_plot, x= 0.20, y = 0.65, width = .35, height = .35)+ 
+  draw_plot(lwb_post_plot, x= 0.65, y = 0.11, width = .35, height = .35)
+
+lw_comb_plot
+
+
+
+####combine these three into one:
+gw_ww_plots_comb<-plot_grid(gw_length_plot, lw_plot, gwl_comb_plot, gwa_comb_plot, ncol = 1, align = "v")
+gw_ww_plots_comb
+
+
+
+ggsave(filename = "gw_ww_combined_plots.pdf", 
+       plot = gw_ww_plots_comb,
+       width = 15, 
+       height = 45,
+       units = "cm",
+       dpi = 300)
+
+####may need to adjust scales/axis ticks, especially for gonad weight posterior plots 
+
+```
+
+
+
+#Excerpts from older scripts: model comparisons
+```{r}
+
+###gonad weight - length models: linear vs. power#### 
+#first check different shapes for the model fit: 
+#linear:
+mod1_gw_nt2 <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      gonad.weight_g  ~ c_length + (1|atoll),
+      prior = c(prior(normal(0,10), class = Intercept), ###weakly informative prior
+                prior(lognormal(0, 1), class = "b", coef = "c_length")), #this has to be above 0 (positive relationship between gonad weight-length)
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "mod1_gw_nt2")
+print(mod1_gw_nt2)
+plot(mod1_gw_nt2)
+pp_check(mod1_gw_nt2)
+
+#power:
+prior_nl_gw<- c(
+  prior(lognormal(0 , 1 ), nlpar = "a", lb = 0), ##both have to be above 0, that's about it....
+  prior(lognormal(0, 1), nlpar = "b", lb = 0) ##both have to be above 0, that's about it....
+)
+
+mod1_gw_nl <- 
+  brm(
+    bf(
+      gonad.weight_g ~ a*fork_length_cm^b,
+      a~1, b~1,
+      nl=TRUE),
+    data = cso_dat_lfm, family = gaussian,
+    prior = prior_nl_gw,
+     iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+    control = list(adapt_delta = 0.999, max_treedepth=15),  
+    sample_prior=TRUE,
+     file = "mod1_gw_nl"
+  )
+print(mod1_gw_nl)
+plot(mod1_gw_nl)
+pp_check(mod1_gw_nl)
+
+
+loo(mod1_gw_nl, mod1_gw_nt2)
+model_weights(mod1_gw_nl, mod1_gw_nt2,  weights = "loo") %>%
+round(digits = 3)
+##linear model is definitely better fit.
+
+####gonad weight-length: additive vs. interaction models####
+###compare additive model to one with interaction term:
+gw_length_mod_int <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      gonad.weight_g  ~ c_length*treatment_b + (1|atoll),
+      prior = c(prior(normal(2,10), class = Intercept), ###weakly informative prior
+                prior(lognormal(0, 1), class = "b", coef = "c_length"), #this has to be above 0 (positive relationship between gonad weight-length)
+                prior(normal(0, 10), class = "b", coef = "treatment_bbirdy")), #weakly informative prior
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "gw_length_mod_int")
+print(gw_length_mod_int)
+print(gw_length_mod)
+
+##compare using loo, waic:
+gw_length_mod_int<-add_criterion(gw_length_mod_int, c("waic", "loo"))
+gw_length_mod<-add_criterion(gw_length_mod, c("waic", "loo"))
+loo(gw_length_mod_int, gw_length_mod)
+model_weights(gw_length_mod_int, gw_length_mod, weights = "loo") %>%
+round(digits = 3)
+##definitely no imporvement by including interaction, much more weight given to additive model. 
+##parameter estimates are nearly identical regardless of model, so use simpler additive model. 
+
+#--------------------------------------------------------------------#
+###gonad weight - age models: linear vs. power#### 
+#first check different shapes for the model fit: 
+#linear:
+mod1_gw_age_nt2 <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      gonad.weight_g  ~ c_age + (1|atoll),
+      prior = c(prior(normal(0,10), class = Intercept), ###weakly informative prior
+                prior(lognormal(0, 1), class = "b", coef = "c_age")), #this has to be above 0 (positive relationship between gonad weight-length)
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "mod1_gw_age_nt2")
+print(mod1_gw_age_nt2)
+plot(mod1_gw_age_nt)
+pp_check(mod1_gw_age_nt)
+
+#power:
+prior_nl_age<- c(
+  prior(lognormal(0 , 1), nlpar = "a", lb = 0), ##both have to be above 0, that's about it....
+  prior(lognormal(0, 1), nlpar = "b", lb = 0) ##both have to be above 0, that's about it....
+)
+mod1_gw_age_nl <- 
+  brm(
+    bf(
+      gonad.weight_g ~ a*age_final^b,
+      a~1, b~1,
+      nl=TRUE),
+    data = cso_dat_lfm, family = gaussian,
+    prior = prior_nl_age,
+     iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+    control = list(adapt_delta = 0.999, max_treedepth=15),  
+    sample_prior=TRUE,
+     file = "mod1_gw_age_nl"
+  )
+print(mod1_gw_age_nl)
+plot(mod1_gw_age_nl)
+pp_check(mod1_gw_age_nl)
+
+
+loo(mod1_gw_age_nl, mod1_gw_age_nt)
+model_weights(mod1_gw_age_nl, mod1_gw_age_nt2,  weights = "loo") %>%
+round(digits = 3)
+##linear model is definitely better fit.
+
+####gonad weight-age: additive vs. interaction models####
+###compare additive model to one with interaction term:
+gw_age_mod_int <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      gonad.weight_g  ~ c_age*treatment_b + (1|atoll),
+      prior = c(prior(normal(0,10), class = Intercept), ###weakly informative prior
+                prior(lognormal(0, 1), class = "b", coef = "c_age"), #this has to be above 0 (positive relationship between gonad weight-length)
+                prior(normal(0, 10), class = "b", coef = "treatment_bbirdy")), #weakly informative prior
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "gw_age_mod_int")
+print(gw_age_mod_int)
+print(gw_age_mod)
+
+##compare using loo, waic:
+gw_age_mod_int<-add_criterion(gw_age_mod_int, c("waic", "loo"))
+gw_age_mod<-add_criterion(gw_age_mod, c("waic", "loo"))
+loo(gw_age_mod_int, gw_age_mod)
+model_weights(gw_age_mod_int, gw_age_mod, weights = "loo") %>%
+round(digits = 3)
+##definitely no imporvement by including interaction, much more weight given to additive model. 
+##parameter estimates are nearly identical regardless of model, so use simpler additive model. 
+
+#--------------------------------------------------------------------#
+###length-weight models: linear vs. power#### 
+#first check different shapes for the model fit: 
+readRDS("mod_1_lw_birdy_5.rds")
+range(cso_dat_lfm$whole_wt_g, na.rm=TRUE)
+mean(cso_dat_lfm$whole_wt_g, na.rm=TRUE)
+#linear:
+mod1_lw_nt <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      whole_wt_g  ~ c_length + (1|atoll),
+      prior = c(prior(normal(0,10), class = Intercept), ###weakly informative prior
+                prior(lognormal(0, 1), class = "b", coef = "c_length")), #this has to be above 0 (positive relationship between weight-length)
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "mod1_lw_nt")
+print(mod1_lw_nt)
+plot(mod1_lw_nt)
+pp_check(mod1_lw_nt)
+
+
+#power:
+###try making an nls model:
+prior_nl<- c(
+  prior(lognormal(0 , 1 ), nlpar = "a", lb = 0), ##both have to be above 0, that's about it....
+  prior(lognormal(0, 1), nlpar = "b", lb = 0) ##both have to be above 0, that's about it....
+)
+
+mod1_lw_nl <- 
+  brm(
+    bf(
+      whole_wt_g ~ a*fork_length_cm^b,
+      a~1, b~1,
+      nl=TRUE),
+    data = cso_dat_lfm, family = gaussian,
+    prior = prior_nl,
+     iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+    control = list(adapt_delta = 0.999, max_treedepth=15),  
+    sample_prior=TRUE,
+     file = "mod1_lw_nl"
+  )
+print(mod1_lw_nl) #cso_growth_mod_bird
+##a estimate = 0, b estimate = 2.64
+pp_check(mod1_lw_nl)
+
+
+loo(mod1_lw_nt, mod1_lw_nl)
+model_weights(mod1_lw_nl, mod1_lw_nt, weights = "loo") %>%
+round(digits = 3)
+###yup, non-linear model is best, by far
+
+
+####weight-length: additive vs. interaction models####
+###compare additive model to one with interaction term:
+lw_mod_ll_add<-
+brm(data = cso_dat_lfm, family = gaussian,
+      lweight_g  ~ llength + treatment_b + (1|atoll),
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      prior = c(prior(normal(-10, 10), class = Intercept), ##really could constrain this to be below 0, but not sure how
+                prior(lognormal(0, 1), class = "b", coef = "llength"), ##now this is constrained to stay above 0....
+                prior(normal(0, 1), class = "b", coef = "treatment_bbirdy")), # not constrained (but only need sd = 1 because log-log model)
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "lw_mod_ll_add")
+print(lw_mod_ll_add)
+plot(lw_mod_ll_add)
+pp_check(lw_mod_ll_add)
+
+
+lw_mod_ll_int<-
+brm(data = cso_dat_lfm, family = gaussian,
+      lweight_g  ~ llength * treatment_b + (1|atoll),
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      prior = c(prior(normal(-10, 10), class = Intercept), ##really could constrain this to be below 0, but not sure how
+                prior(lognormal(0, 1), class = "b", coef = "llength"), ##now this is constrained to stay above 0....
+                prior(normal(0, 1), class = "b", coef = "treatment_bbirdy")), # not constrained (but only need sd = 1 because log-log model)
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "lw_mod_ll_int")
+print(lw_mod_ll_int)
+plot(lw_mod_ll_int)
+pp_check(lw_mod_ll_int)
+
+
+##compare using loo, waic:
+lw_mod_ll_int<-add_criterion(lw_mod_ll_int, c("waic", "loo"))
+lw_mod_ll_add<-add_criterion(lw_mod_ll_add, c("waic", "loo"))
+loo(lw_mod_ll_int, lw_mod_ll_add)
+model_weights(lw_mod_ll_int, lw_mod_ll_add, weights = "loo") %>%
+round(digits = 3)
+##definitely big improvement by adding interaction term, so need to use this model for all analysis. 
+
+```
+

@@ -1,0 +1,357 @@
+---
+title: "R Notebook: C. sordidus N15 and N% analyses - 2020/02/11"
+output: html_notebook
+---
+
+
+#Load packages
+```{r}
+library(tidyverse)
+library(brms)
+library(tidybayes)
+library(modelr) #for data_grid function
+library(bayesplot)
+library(gridExtra) #for plots
+library(RColorBrewer) #for plots
+library(cowplot) #for plots
+library(scales) #for plots
+```
+
+#Load data
+```{r}
+load("cso_data.Rdata")
+
+##want to use lagoon, female, stage 3 only file:
+head(cso_dat_lfm)
+str(cso_dat_lfm)
+##NOTE: CAN USE ONES WITH WRONG WEIGHT FOR N ANALYSIS
+
+
+###just checking sample sizes:
+cso_dat_lfm %>% 
+  group_by(atoll, island) %>% 
+  tally()
+
+#log-transform variables:
+str(cso_dat_lfm)
+cso_dat_lfm$lN15<-log(cso_dat_lfm$N15)
+cso_dat_lfm$lNperc<-log(cso_dat_lfm$N_percent)
+
+##re-level to make ratty the reference level, rather than birdy:
+cso_dat_lfm$treatment_b<-relevel(cso_dat_lfm$treatment, "ratty")
+
+```
+
+#Final models (earlier versions built up models slowly, compared distributions for best fit, compared different priors, etc. - all came to same conclusions)
+#N15
+```{r}
+#Info for intercept prior:
+#Plass-Jouhnsn et al. 2013 coral reefs: IP C. sordidus N15 mean = 6.0 +/-0.1, range = 4.9 to 7.1 (but different isotopic baselines)
+#Graham et al. 2018 Nature: Same islands, but damselfish: N15 = 9.69 to 11.81
+
+N15_mod_t <- 
+  brm(data = cso_dat_lfm, family = student,
+      N15  ~ treatment_b  + (1|atoll),
+     prior = c(prior(normal(10,10), class = Intercept), #weakly informative intercept prior
+       prior(normal(0, 10), class = "b", coef = "treatment_bbirdy")), #weakly informative rat prior
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "N15_mod_t")
+print(N15_mod_t)
+plot(N15_mod_t, ask = FALSE)
+pp_check(N15_mod_t) 
+pairs(N15_mod_t)
+#all diagnostics look good
+prior_summary(N15_mod_t)
+
+#check plots of priors and posterior versus prior distributions: 
+N15_mod_t %>% 
+  prior_summary() %>% #don't need this line when plotting priors before running the model
+  mutate(label = pmap_chr(select(., -prior), paste)) %>% 
+  parse_dist(prior) %>% 
+  ggplot(aes(y = 0, dist = .dist, args = .args)) + 
+  stat_dist_halfeyeh() + 
+  geom_text(aes(label = prior), x = 0, y = .97) + 
+  facet_wrap(~ label, scales = "free_x")
+
+#intercept:
+posterior_samples(N15_mod_t) %>% 
+  select(b_Intercept, prior_b) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope:
+posterior_samples(N15_mod_t) %>% 
+  select(b_treatment_bbirdy, prior_b) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+
+#Compile posterior distributions:
+N15_post <- posterior_samples(N15_mod_t)
+median_hdi(N15_post$b_treatment_bbirdy, .width = .95) #median estimate = 0.02, ymin = -0.16, ymax = 0.19
+
+
+#test hypothesis that birdy effect is > 0
+hypothesis(N15_mod_t, "treatment_bbirdy>0") 
+#evidence ratio = 1.36, posterior probability = 0.58 - so not really any evidence for birdy effect on N15
+
+```
+
+
+#%N
+```{r}
+#Info for intercept prior:
+#Graham et al. 2018 Nature: Same islands, but damselfish: N% = 12.08 14.72
+readRDS("Nperc_mod_t.rds")
+Nperc_mod_t <- 
+  brm(data = cso_dat_lfm, family = student,
+      N_percent  ~ treatment_b  + (1|atoll),
+       prior = c(prior(normal(14,10), class = Intercept), #weakly informative intercept prior
+                prior(normal(0, 10), class = "b", coef = "treatment_bbirdy")), #weakly informative rat prior
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "Nperc_mod_t")
+print(Nperc_mod_t)
+plot(Nperc_mod_t, ask = FALSE)
+pp_check(Nperc_mod_t) 
+pairs(Nperc_mod_t)
+#all diagnostics look good
+
+#check plots of priors and posterior versus prior distributions: 
+Nperc_mod_t %>% 
+  prior_summary() %>% #don't need this line when plotting priors before running the model
+  mutate(label = pmap_chr(select(., -prior), paste)) %>% 
+  parse_dist(prior) %>% 
+  ggplot(aes(y = 0, dist = .dist, args = .args)) + 
+  stat_dist_halfeyeh() + 
+  geom_text(aes(label = prior), x = 0, y = .97) + 
+  facet_wrap(~ label, scales = "free_x")
+
+#intercept:
+posterior_samples(Nperc_mod_t) %>% 
+  select(b_Intercept, prior_b) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope:
+posterior_samples(Nperc_mod_t) %>% 
+  select(b_treatment_bbirdy, prior_b) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#Compile posterior distributions:
+N_post <- posterior_samples(Nperc_mod_t)
+median_hdi(N_post$b_treatment_bbirdy, .width = .95) #median estimate = 0.23, ymin = 0.11, ymax = 0.35
+
+
+#test hypothesis that birdy effect is > 0
+hypothesis(Nperc_mod_t, "treatment_bbirdy>0") 
+#evidence ratio = 7999, posterior probability = 1 - so extremely strong evidence for birdy effect on %N
+
+```
+
+##Plots
+#Boxplots of raw data
+```{r}
+
+N15_box<-
+cso_dat_lfm %>% 
+ mutate(treatment = factor(treatment, levels=c("ratty", "birdy")))  %>% #re-arrange to match posterior plots
+  ggplot(aes(x=treatment, y=N15, fill=treatment, shape=treatment, alpha = 0.6)) + 
+  geom_boxplot(outlier.size=0, outlier.stroke=0) + #, alpha = 0.6
+  geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.7)) + 
+  scale_fill_manual(values = c("#DC3220", "#005AB5"))+
+  scale_shape_manual(values = c(23,21)) + 
+  scale_x_discrete(labels=c("rat-infested", "rat-free")) +
+  scale_y_continuous(labels=scales::number_format(accuracy=0.1))+
+  theme_bw() + 
+  xlab(" ")+
+  ylab(expression(paste(delta, "N"^15))) + 
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+N15_box
+
+
+Nperc_box<-
+cso_dat_lfm %>% 
+ mutate(treatment = factor(treatment, levels=c("ratty", "birdy")))  %>% #re-arrange to match posterior plots
+  ggplot(aes(x=treatment, y=N_percent, fill=treatment, shape = treatment, alpha = 0.6)) + 
+  geom_boxplot(outlier.size=0, outlier.stroke=0) +
+  geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.7)) + 
+  scale_fill_manual(values = c("#DC3220", "#005AB5"))+
+  scale_shape_manual(values = c(23,21)) + 
+  scale_x_discrete(labels=c("rat-infested", "rat-free")) +
+  scale_y_continuous(labels=scales::number_format(accuracy=0.1))+
+  theme_bw() + 
+  xlab(" ")+
+  ylab("% nitrogen") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+Nperc_box
+
+##,
+     ##   axis.title.y = element_text(size=16, face="bold"),
+     ##   axis.text.x = element_text(size=16, face="bold")
+
+
+
+##########CHANGE RAT-INFESTED TO TRIANGLES TO MATCH OTHER PLOTS###########
+
+```
+
+
+#Posterior plots
+```{r}
+
+##plot of birdy treatment effect
+
+
+##N percent
+Nperc_post_plot<-
+Nperc_mod_t %>%
+  spread_draws(b_treatment_bbirdy) %>%
+  ggplot(aes(y = 0, x = b_treatment_bbirdy, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("% nitrogen")+
+  ylab("") +
+  scale_y_continuous(NULL, breaks = NULL) +
+  scale_x_continuous(limits=c(-.5, .5), breaks=seq(-.5, .5,.25))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.title.y = element_text(size=16, face="bold"))
+Nperc_post_plot
+
+
+
+##N15
+N15_post_plot<-
+N15_mod_t %>%
+  spread_draws(b_treatment_bbirdy) %>%
+  ggplot(aes(y = 0, x = b_treatment_bbirdy, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab(expression(paste(delta, "N"^15)))+
+  ylab("") +
+  scale_y_continuous(NULL, breaks = NULL) +
+  scale_x_continuous(limits=c(-.5, .5), breaks=seq(-.5, .5,.25))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.title.y = element_text(size=16, face="bold"))
+
+N15_post_plot
+
+```
+
+
+##Combine plots
+```{r}
+####NEW:
+Nperc_plot <-
+  ggdraw() + 
+  draw_plot(Nperc_box, x = 0, y = 0, width = 0.55, height = 1) +
+  draw_plot(Nperc_post_plot,  x = 0.55, y = 0, width = 0.45, height = 1) 
+Nperc_plot
+
+N15_plot <-
+  ggdraw() + 
+  draw_plot(N15_box, x = 0, y = 0, width = 0.55, height = 1) +
+  draw_plot(N15_post_plot,  x = 0.55, y = 0, width = 0.45, height = 1) 
+N15_plot
+
+
+aligned_n_plot<-plot_grid(Nperc_plot, N15_plot,
+                    ncol = 1, align = c("v", "h"))
+aligned_n_plot
+
+
+
+ggsave(filename = "nitrogen_combined_plots_3b.pdf", 
+       plot = aligned_n_plot,
+       width = 20, 
+       height = 13.3,
+       units = "cm",
+       dpi = 300,
+       family = "sans",
+       useDingbats=FALSE)
+
+
+#########
+####OLD:
+###combine plots
+box_aligned<-plot_grid(Nperc_box, N15_box, ncol = 1, align = "v")
+box_aligned
+
+post_aligned<-plot_grid(Nperc_post_plot, N15_post_plot, ncol = 1, align = "v")
+post_aligned
+
+nitrogen_combined_plots<-
+ggdraw() +
+  draw_plot(box_aligned, x = 0, y = 0, width = .5, height = 1) +
+  draw_plot(post_aligned, x = .5, y = 0, width = .5, height = 1) +
+  draw_plot_label(label = c("a", "c", "b", "d"), size = 12,
+                  x = c(0.12, 0.12, 0.51, .51), y = c(.99, .49, .99, 0.49))
+
+nitrogen_combined_plots
+
+#nitrogen_combined_plots2<-plot_grid(Nperc_box, Nperc_post_plot, N15_box,N15_post_plot,
+#                    ncol = 2, align = c("v", "h"))
+#nitrogen_combined_plots2
+
+
+#export pdf:
+ggsave(filename = "nitrogen_combined_plots_June2.pdf", 
+       plot = nitrogen_combined_plots2,
+       width = 17, 
+       height = 12,
+       units = "cm",
+       dpi = 300,
+       family = "sans",
+       useDingbats=FALSE)
+
+##export eps, preserve fonts and transparency (but then illustrator doesn't recognise as fonts: 
+ggsave(filename = "nitrogen_combined_plots_May22.eps", 
+       plot = nitrogen_combined_plots,
+       width = 17, 
+       height = 12,
+       units = "cm",
+       dpi = 300,
+       family = "sans", device=cairo_ps, fallback_resolution = 600)
+
+
+```
+
+
