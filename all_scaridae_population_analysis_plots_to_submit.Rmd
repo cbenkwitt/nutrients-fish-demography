@@ -23,34 +23,18 @@ library(cowplot) #for plots
 ```{r}
 
 load("cso_surveys_data.Rdata")
-##contains fish_surveys, fish_surv_novm, cso_only, cso_only_2015, cso_only_2018, chl_only, chl_only_2015, chl_only_2018, scar_only, scar_only_2015, scar_only_2018, cso_only_sum, chl_only_sum, scar_only_sum
+
 
 ##extend to all parrotfish (Scaridae) as comparison...
-str(scar_only_sum) #summed by transect, need to delete 2015
+str(scar_only_sum_2018) #summed by transect
+str(scar_only_2018) ##by individual, for length data
 
-
+###data transformations
 scar_only_sum_2018<-
-  scar_only_sum  %>%
-  filter(Year == "2018")  %>%
-  droplevels()
-str(scar_only_sum_2018)
-
-##log response variables: 
-scar_only_sum_2018$lbio<-log(scar_only_sum_2018$sum_bio+1)
-scar_only_sum_2018$ldens<-log(scar_only_sum_2018$sum_dens+1)
-
-
-##Sum by reef 
-scar_only_reef_2018<-
-  scar_only_sum_2018  %>%
-  group_by(Atoll, Island, Treatment)  %>%
-  summarize(sum_bio_reef=sum(sum_bio),
-            sum_dens_reef = sum(sum_dens))
-str(scar_only_reef_2018)
-scar_only_reef_2018
-##None present at: GCB South Brother (no rats)
-
-
+  scar_only_sum_2018  %>% 
+  mutate(lbio = log(cso_only_sum_2018$sum_bio+1),
+         ldens = log(cso_only_sum_2018$sum_dens+1))
+  
 ###re-level so ratty is reference: 
 scar_only_sum_2018$treatment_b<-relevel(scar_only_sum_2018$Treatment, "Rats")
 
@@ -58,9 +42,8 @@ scar_only_sum_2018$treatment_b<-relevel(scar_only_sum_2018$Treatment, "Rats")
 ###for size distributions, need non-aggregated data:
 ###re-level for birdy effect: 
 scar_only_2018$treatment_b<-relevel(scar_only_2018$Treatment, "Rats")
-scar_only_2018$llength<-log(scar_only_2018$Length)
-
 ```
+
 
 ##Biomass models
 ```{r}
@@ -214,8 +197,6 @@ nrow(scar_only_sum_2018[scar_only_sum_2018$Treatment=="No_rats"&scar_only_sum_20
 nrow(scar_only_sum_2018[scar_only_sum_2018$Treatment=="No_rats",]) ##20
 nrow(scar_only_sum_2018[scar_only_sum_2018$Treatment=="No_rats"&scar_only_sum_2018$sum_dens==0,]) ##7
 
-
-
 ```
 
 
@@ -235,7 +216,7 @@ all_scar_size_mod_skew<-
            sample_prior="yes",
       file = "all_scar_size_mod_skew") ###2 divergent transitions, but ESS OKAY :) 
 pp_check(all_scar_size_mod_skew)
-print(all_scar_size_mod_skew) ##these estimates make a lot more sense....
+print(all_scar_size_mod_skew) ##these estimates make sense....
 plot(all_scar_size_mod_skew, ask = FALSE)
 prior_summary(all_scar_size_mod_skew)
 
@@ -399,24 +380,6 @@ scar_size_hist
 
 ####combine plots - density, biomass, size:
 ```{r}
-##need to align boxplots, because different widths (because different decimal places in y-axis)
-scar_aligned_survey_plot<-plot_grid(scar_dens_boxplot_no0, scar_dens_post_plot, scar_bio_boxplot_no0, scar_bio_post_plot, scar_size_hist, 
-                    scar_size_post_plot, 
-                    ncol = 2, align = c("v", "h"))
-scar_aligned_survey_plot
-
-
-ggsave(filename = "dens_bio_size_plot_comb_scar.pdf", 
-       plot = scar_aligned_survey_plot,
-       width = 17, 
-       height = 17,
-       units = "cm",
-       dpi = 300,
-       family = "sans",
-       useDingbats=FALSE)
-
-
-####alternative:
 scar_dens_plot <-
   ggdraw() + 
   draw_plot(scar_dens_boxplot_no0, x = 0, y = 0, width = 0.55, height = 1) +
@@ -442,7 +405,7 @@ scar_aligned_survey_plot
 
 
 
-ggsave(filename = "dens_bio_size_plot_comb_scar3b.pdf", 
+ggsave(filename = "dens_bio_size_plot_comb_scar.pdf", 
        plot = scar_aligned_survey_plot,
        width = 20, 
        height = 20,
@@ -450,8 +413,6 @@ ggsave(filename = "dens_bio_size_plot_comb_scar3b.pdf",
        dpi = 300,
        family = "sans",
        useDingbats=FALSE)
-###THIS WORKS WELL***
-
 ```
 
 

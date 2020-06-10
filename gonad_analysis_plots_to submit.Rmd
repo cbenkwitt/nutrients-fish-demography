@@ -28,30 +28,6 @@ load("cso_data.Rdata")
 head(cso_dat_lfm)
 str(cso_dat_lfm)
 
-##center length
-cso_dat_lfm <- 
-  cso_dat_lfm %>%
-  mutate(c_length = fork_length_cm - mean(fork_length_cm))
-
-##center age
-cso_dat_lfm <- 
-  cso_dat_lfm %>%
-  mutate(c_age = age_final - mean(age_final))
-
-#log variables
-cso_dat_lfm$lgonad_wt<-log(cso_dat_lfm$gonad.weight_g) 
-cso_dat_lfm$llength<-log(cso_dat_lfm$fork_length_cm) 
-cso_dat_lfm$lweight<-log(cso_dat_lfm$whole_wt_kg) 
-
-##center llength
-cso_dat_lfm <- 
-  cso_dat_lfm %>%
-  mutate(c_llength = llength - mean(llength))
-
-#convert whole weight estiamtes to grams, because fishbase a, b parameters in cm and grams, so change our units to make comparable
-cso_dat_lfm$whole_wt_g<-cso_dat_lfm$whole_wt_kg*1000 ###multiply by 1000
-cso_dat_lfm$lweight_g<-log(cso_dat_lfm$whole_wt_g)
-
 
 ##re-level to make ratty the reference level
 cso_dat_lfm$treatment_b<-relevel(cso_dat_lfm$treatment, "ratty")
@@ -316,62 +292,6 @@ lwab_post_plot<-
         axis.text.x = element_text(size=16))
 lwab_post_plot
 
-##I think keep them separate...
-
-
-##Try combining all post plots:
-lwa_tab<-
-lw_mod_ll_int %>%
-  spread_draws(b_treatment_bbirdy, b_Intercept, `b_llength:treatment_bbirdy`) %>%
-  mutate(birdy_b_lw = `b_llength:treatment_bbirdy`,
-          exp_birdy_lw = exp(b_Intercept + b_treatment_bbirdy) - exp(b_Intercept),
-         model = "2_lwa")
-
-lwb_tab<-
-lw_mod_ll_int %>%
-  spread_draws(b_treatment_bbirdy, b_Intercept, `b_llength:treatment_bbirdy`) %>%
-  mutate(birdy_b_lw = `b_llength:treatment_bbirdy`,
-          exp_birdy_lw = exp(b_Intercept + b_treatment_bbirdy) - exp(b_Intercept),
-         model = "1_lwb")
-
-gwl_tab<-
-gw_length_mod %>%
-  spread_draws(b_treatment_bbirdy) %>%
-  mutate(model = "3_gwl")
-
-vbgf_tab<-
-vbgf_mod %>%
-  spread_draws(b_K1_Intercept)  %>%
-  mutate(model = "4_vbgf")
-
-
-#post_tab<-
-#  cbind(lw_tab, gwl_tab, vbgf_tab)
-#post_tab
-
-
-
-  ggplot(data = lwa_tab, aes(y = model, x = birdy_b_lw, fill = stat(x < 0))) +
-  stat_halfeyeh(point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
-  stat_halfeyeh(data = lwb_tab, aes(x=exp_birdy_lw), point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
-  stat_halfeyeh(data = gwl_tab, aes(x=b_treatment_bbirdy), point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
-  stat_halfeyeh(data = vbgf_tab,aes(x=b_K1_Intercept), point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
-  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  theme_bw() + 
-  xlab("Response")+ 
-  ylab("") +
- # scale_y_continuous(NULL, breaks = NULL) +
- # scale_x_continuous(limits=c(-.2, 1), breaks=seq(-.2, 1,.2), labels = scales::number_format(accuracy = 0.1))+
-   theme(panel.grid.major = element_blank(), # remove gridlines
-        panel.grid.minor = element_blank(), #remove gridlines
-        strip.background = element_blank(), 
-        legend.position = "none",  
-        rect = element_rect(fill = "transparent"),  
-        plot.background = element_rect(fill = "transparent", color = NA),
-        text=element_text(size=16,  family="sans"),
-        axis.text.x = element_text(size=16))
-
 ```
 
 
@@ -446,48 +366,6 @@ lw_comb_plot <-
   draw_plot(lwa_post_plot, x= .5, y = 0, width = .25, height = 1)+ 
   draw_plot(lwb_post_plot, x= 0.75, y = 0, width = .25, height = 1)
 lw_comb_plot
-
-
-
-
-###OLD:
-###gonad weight - length
-gwl_comb_plot <-
-  ggdraw() +
-  draw_plot(gw_length_plot) +
-  draw_plot(gwl_post_plot, x= 0.16, y = 0.65, width = .35, height = .35)
-
-gwl_comb_plot
-gwl_comb_plot <-
-  plot_grid(gw_length_plot, gwl_post_plot, ncol = 2, align = "hv")
-gwl_comb_plot
-
-
-###length-weight
-lw_comb_plot <-
-  ggdraw() +
-  draw_plot(lw_plot) +
-  draw_plot(lwa_post_plot, x= 0.20, y = 0.65, width = .35, height = .35)+ 
-  draw_plot(lwb_post_plot, x= 0.65, y = 0.11, width = .35, height = .35)
-
-lw_comb_plot
-
-
-
-####combine these three into one:
-gw_ww_plots_comb<-plot_grid(gw_length_plot, lw_plot, gwl_comb_plot, gwa_comb_plot, ncol = 1, align = "v")
-gw_ww_plots_comb
-
-
-
-ggsave(filename = "gw_ww_combined_plots.pdf", 
-       plot = gw_ww_plots_comb,
-       width = 15, 
-       height = 45,
-       units = "cm",
-       dpi = 300)
-
-####may need to adjust scales/axis ticks, especially for gonad weight posterior plots 
 
 ```
 

@@ -1,6 +1,8 @@
 ---
 title: "R Notebook: C. sordidus N15 and N% analyses - 2020/02/11"
 output: html_notebook
+editor_options: 
+  chunk_output_type: inline
 ---
 
 
@@ -20,22 +22,8 @@ library(scales) #for plots
 #Load data
 ```{r}
 load("cso_data.Rdata")
-
-##want to use lagoon, female, stage 3 only file:
 head(cso_dat_lfm)
 str(cso_dat_lfm)
-##NOTE: CAN USE ONES WITH WRONG WEIGHT FOR N ANALYSIS
-
-
-###just checking sample sizes:
-cso_dat_lfm %>% 
-  group_by(atoll, island) %>% 
-  tally()
-
-#log-transform variables:
-str(cso_dat_lfm)
-cso_dat_lfm$lN15<-log(cso_dat_lfm$N15)
-cso_dat_lfm$lNperc<-log(cso_dat_lfm$N_percent)
 
 ##re-level to make ratty the reference level, rather than birdy:
 cso_dat_lfm$treatment_b<-relevel(cso_dat_lfm$treatment, "ratty")
@@ -106,7 +94,6 @@ hypothesis(N15_mod_t, "treatment_bbirdy>0")
 ```{r}
 #Info for intercept prior:
 #Graham et al. 2018 Nature: Same islands, but damselfish: N% = 12.08 14.72
-readRDS("Nperc_mod_t.rds")
 Nperc_mod_t <- 
   brm(data = cso_dat_lfm, family = student,
       N_percent  ~ treatment_b  + (1|atoll),
@@ -208,14 +195,6 @@ cso_dat_lfm %>%
         axis.text.x = element_text(size=16))
 Nperc_box
 
-##,
-     ##   axis.title.y = element_text(size=16, face="bold"),
-     ##   axis.text.x = element_text(size=16, face="bold")
-
-
-
-##########CHANGE RAT-INFESTED TO TRIANGLES TO MATCH OTHER PLOTS###########
-
 ```
 
 
@@ -279,7 +258,6 @@ N15_post_plot
 
 ##Combine plots
 ```{r}
-####NEW:
 Nperc_plot <-
   ggdraw() + 
   draw_plot(Nperc_box, x = 0, y = 0, width = 0.55, height = 1) +
@@ -298,8 +276,7 @@ aligned_n_plot<-plot_grid(Nperc_plot, N15_plot,
 aligned_n_plot
 
 
-
-ggsave(filename = "nitrogen_combined_plots_3b.pdf", 
+ggsave(filename = "nitrogen_combined_plots.pdf", 
        plot = aligned_n_plot,
        width = 20, 
        height = 13.3,
@@ -307,50 +284,6 @@ ggsave(filename = "nitrogen_combined_plots_3b.pdf",
        dpi = 300,
        family = "sans",
        useDingbats=FALSE)
-
-
-#########
-####OLD:
-###combine plots
-box_aligned<-plot_grid(Nperc_box, N15_box, ncol = 1, align = "v")
-box_aligned
-
-post_aligned<-plot_grid(Nperc_post_plot, N15_post_plot, ncol = 1, align = "v")
-post_aligned
-
-nitrogen_combined_plots<-
-ggdraw() +
-  draw_plot(box_aligned, x = 0, y = 0, width = .5, height = 1) +
-  draw_plot(post_aligned, x = .5, y = 0, width = .5, height = 1) +
-  draw_plot_label(label = c("a", "c", "b", "d"), size = 12,
-                  x = c(0.12, 0.12, 0.51, .51), y = c(.99, .49, .99, 0.49))
-
-nitrogen_combined_plots
-
-#nitrogen_combined_plots2<-plot_grid(Nperc_box, Nperc_post_plot, N15_box,N15_post_plot,
-#                    ncol = 2, align = c("v", "h"))
-#nitrogen_combined_plots2
-
-
-#export pdf:
-ggsave(filename = "nitrogen_combined_plots_June2.pdf", 
-       plot = nitrogen_combined_plots2,
-       width = 17, 
-       height = 12,
-       units = "cm",
-       dpi = 300,
-       family = "sans",
-       useDingbats=FALSE)
-
-##export eps, preserve fonts and transparency (but then illustrator doesn't recognise as fonts: 
-ggsave(filename = "nitrogen_combined_plots_May22.eps", 
-       plot = nitrogen_combined_plots,
-       width = 17, 
-       height = 12,
-       units = "cm",
-       dpi = 300,
-       family = "sans", device=cairo_ps, fallback_resolution = 600)
-
 
 ```
 

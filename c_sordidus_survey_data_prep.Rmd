@@ -1,0 +1,111 @@
+---
+title: "R Notebook: C. sordidus population-level surveys - data prep"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+#Step 0: Load packages
+```{r}
+library(tidyverse)
+```
+
+
+#Step 1: Load and clean csv data, then save as .Rdata
+```{r}
+####Load parrotfish data
+scar_dat <- read.csv("Chagos_rats_birds_UVC_data_2018_2019.csv", header=TRUE)
+
+####Load metadata
+meta_dat <- read.csv("Chagos_rats_birds_metadata_2018_2019.csv", header=TRUE) #meta-data for transects
+
+
+str(scar_dat)
+str(meta_dat)
+
+
+scar_dat_2<-
+  scar_dat  %>%
+  mutate(Transect = as.factor(Transect), ##make Transect a factor (will be important for keeping missing data later on)
+         Year = ifelse(Year==2019, 2018, Year)) ###recode Eagle survey year from 2019 to 2018 to make it easier to use
+
+meta_dat_2<-
+  meta_dat  %>%
+  mutate(Transect = as.factor(Transect), ##make Transect a factor (will be important for keeping missing data later on)
+         Year = ifelse(Year==2019, 2018, Year)) ###recode Eagle survey year from 2019 to 2018 to make it easier to use
+```
+
+
+###Make dataframe with C. sordidus only, also rename parrotfish data
+```{r}
+
+####limit to Chlorurus sordidus only####
+cso_only_2018<-
+  scar_dat_2  %>%
+  filter(Species == "Chlorurus_sordidus")  %>%
+  droplevels()
+str(cso_only_2018)
+
+
+scar_only_2018<-scar_dat_2
+
+```
+
+
+####sum by transect
+```{r}
+##Sordidus only
+cso_only_sum_a<-
+  scar_dat_2  %>%
+  filter(Species == "Chlorurus_sordidus") %>%
+  group_by(Year, Island, Transect, .drop=FALSE)  %>%
+  summarize(sum_bio=sum(Biomass),
+            sum_dens = sum(Abundance))
+
+
+##add back in other metadata
+cso_only_sum_b<-
+  left_join(meta_dat_2, cso_only_sum_a,  by = c("Year", "Island", "Transect")) #add back in other metadata
+str(cso_only_sum_b) # 44 rows - matches transects: 4*11
+
+
+###change NA's for South Brother to 0's (these were surveyed, just no C. sordidus on transects)
+###also change Island back to factor
+
+cso_only_sum_2018 <-
+  cso_only_sum_b %>%
+  mutate(Island = as.factor(Island),
+         sum_bio = replace_na(sum_bio, 0),
+         sum_dens = replace_na(sum_dens, 0))
+str(cso_only_sum_2018)
+
+
+#####All parrotfish
+scar_only_2018<-
+  scar_dat_2  %>%
+  group_by(Year, Island, Transect, .drop=FALSE)  %>%
+  summarize(sum_bio=sum(Biomass),
+            sum_dens = sum(Abundance))
+
+##add back in other metadata
+  scar_only_sum_b<-
+   left_join(meta_dat_2, scar_only_sum_a,  by = c("Year", "Island", "Transect")) #add back in other metadata
+str(scar_only_sum_b) # 44 rows - matches transects: 4*11
+
+
+###change NA's for South Brother to 0's (these were surveyed, just no C. sordidus on transects)
+###also change Island back to factor
+scar_only_sum_2018 <-
+  scar_only_sum_b %>%
+  mutate(Island = as.factor(Island),
+         sum_bio = replace_na(sum_bio, 0),
+         sum_dens = replace_na(sum_dens, 0))
+str(scar_only_sum_2018)
+
+```
+
+
+#####save tibbles as .Rdata
+```{r}
+save(cso_only_2018, cso_only_sum_2018, scar_only_2018, scar_only_sum_2018, file = "cso_surveys_data.Rdata")
+```

@@ -19,28 +19,9 @@ library(cowplot) #for plots
 ```{r}
 
 load("cso_data.Rdata")
-##contains all data (cso_dat), lagoon only (cso_dat_l), lagoon and female only (cso_dat_lf), and lagoon, female, stage = 3 only (cso_dat_lfm)
 
-##want to use lagoon, female, stage 3 only file:
-head(cso_dat_lfm)
+##want to use lagoon, female, stage 3:
 str(cso_dat_lfm)
-
-
-##center length
-cso_dat_lfm <- 
-  cso_dat_lfm %>%
-  mutate(c_length = fork_length_cm - mean(fork_length_cm))
-
-
-##center age
-cso_dat_lfm <- 
-  cso_dat_lfm %>%
-  mutate(c_age = age_final - mean(age_final))
-
-
-cso_dat_lfm$lgonad_wt<-log(cso_dat_lfm$gonad.weight_g) 
-cso_dat_lfm$llength<-log(cso_dat_lfm$fork_length_cm) 
-cso_dat_lfm$lweight<-log(cso_dat_lfm$whole_wt_kg) 
 
 ##re-level to make ratty the reference level
 cso_dat_lfm$treatment_b<-relevel(cso_dat_lfm$treatment, "ratty")
@@ -366,7 +347,7 @@ popn_rep_plot <-
 popn_rep_plot
 
 
-ggsave(filename = "popn_gonad_plot_combined_3b.pdf", 
+ggsave(filename = "popn_gonad_plot_combined.pdf", 
        plot = popn_rep_plot,
        width = 20, 
        height = 6.66,
@@ -374,25 +355,6 @@ ggsave(filename = "popn_gonad_plot_combined_3b.pdf",
        dpi = 300,
        family = "sans",
        useDingbats=FALSE)
-
-
-###########
-####OLDER:
-##need to align boxplots, because different widths (because different decimal places in y-axis)
-aligned_popn_gonad_plot<-plot_grid(popn_gonad_boxplot_no0, popn_gonad_post_plot,
-                    ncol = 2, align = c("v", "h"))
-aligned_popn_gonad_plot
-
-
-ggsave(filename = "popn_gonad_plot_combined.pdf", 
-       plot = aligned_popn_gonad_plot,
-       width = 17, 
-       height = 10,
-       units = "cm",
-       dpi = 300,
-       family = "sans",
-       useDingbats=FALSE)
-
 ```
 
 
@@ -460,6 +422,7 @@ cso_only_sum_2018_gw3b$Atoll<-as.factor(cso_only_sum_2018_gw3b$Atoll)
 str(cso_only_sum_2018_gw3b)
 
 ```
+
 
 ##run model - different size cutoff
 ```{r}

@@ -24,41 +24,25 @@ library(scales) #for plots
 ```{r}
 load("cso_surveys_data.Rdata")
 
-##want to start with sordidus only, 2018/2019
-str(cso_only_sum) #summed by transect, need to delete 2015
-
-cso_only_sum_2018<-
-  cso_only_sum  %>%
-  filter(Year == "2018")  %>%
-  droplevels()
-str(cso_only_sum_2018)
-##remove Nelson as Island level because not surveyed in 2018/2019
+##want to start with sordidus only, 2018/2019, summed by trasnect
+str(cso_only_sum_2018) 
 
 ###data transformations
-cso_only_sum_2018$lbio<-log(cso_only_sum_2018$sum_bio+1)
-cso_only_sum_2018$ldens<-log(cso_only_sum_2018$sum_dens+1)
-
-
-######sum by reef
-cso_only_reef_2018<-
-  cso_only_sum_2018  %>%
-  group_by(Atoll, Island, Treatment)  %>%
-  summarize(sum_bio_reef=sum(sum_bio),
-            sum_dens_reef = sum(sum_dens))
-str(cso_only_reef_2018)
-cso_only_reef_2018
-##None present at: GCB Eagle (rats), GCB South Brother (no rats), PB Grande Ile Coquillage (No rats)
-
+cso_only_sum_2018<-
+  cso_only_sum_2018  %>% 
+  mutate(lbio = log(cso_only_sum_2018$sum_bio+1),
+         ldens = log(cso_only_sum_2018$sum_dens+1))
+  
 
 ##relevel treatment:
 cso_only_sum_2018$treatment_b<-relevel(cso_only_sum_2018$Treatment, "Rats")
 
 
+
 ###for size distributions, need non-aggregated data:
+str(cso_only_2018)
 ###re-level for birdy effect: 
 cso_only_2018$treatment_b<-relevel(cso_only_2018$Treatment, "Rats")
-###try with log length
-cso_only_2018$llength<-log(cso_only_2018$Length)
 
 ```
 
@@ -357,7 +341,6 @@ hypothesis(size_mod_ex_gaus_wprior, c("treatment_bNo_rats > 0",  ##evidence rati
 ###percent difference
 2.42/((2.42+14.31+14.31)/2) ##15.59%
 
-
 ```
 
 
@@ -427,50 +410,24 @@ size_hist
 
 ####combine plots - density, biomass, size:
 ```{r}
-####newest plots:
-aligned_raw_plots_pop<-plot_grid(dens_boxplot_no0, bio_boxplot_no0, size_hist, ncol = 1, align = "hv")
-aligned_raw_plots_pop
 
-aligned_post_pop<-plot_grid(dens_post_plot, bio_post_plot, size_post_plot, ncol = 1, align = "hv")
-aligned_post_pop
-
-
-comb_plot_pop <-
-  ggdraw() + 
-  draw_plot(aligned_raw_plots_pop, x = 0, y = 0, width = 0.53, height = 1) + # draw_plot(aligned_raw_plots, x = 0, y = 0, width = 0.55, height = 1)
-  draw_plot(aligned_post_pop,  x = 0.53, y = 0, width = 0.47, height = 1) #  draw_plot(post_plots,  x = 0.55, y = 0, width = 0.45, height = 1) 
-comb_plot_pop
-
-ggsave(filename = "fig3_dens_bio_size_plot_comb_3b.pdf", 
-       plot = comb_plot_pop,
-       width = 20, 
-       height = 20,
-       units = "cm",
-       dpi = 300,
-       family = "sans",
-       useDingbats=FALSE)
-
-
-
-
-####alternative:
 dens_plot <-
   ggdraw() + 
   draw_plot(dens_boxplot_no0, x = 0, y = 0, width = 0.55, height = 1) +
   draw_plot(dens_post_plot,  x = 0.55, y = 0, width = 0.45, height = 1) 
-dens_plot
+scar_dens_plot
 
 bio_plot <-
   ggdraw() + 
   draw_plot(bio_boxplot_no0, x = 0, y = 0, width = 0.55, height = 1) +
   draw_plot(bio_post_plot,  x = 0.55, y = 0, width = 0.45, height = 1) 
-bio_plot
+scar_bio_plot
 
 size_plot <-
   ggdraw() + 
   draw_plot(size_hist, x = 0, y = 0, width = 0.55, height = 1) +
   draw_plot(size_post_plot,  x = 0.55, y = 0, width = 0.45, height = 1) 
-size_plot
+scar_size_plot
 
 
 aligned_survey_plot<-plot_grid(dens_plot, bio_plot, size_plot, 
@@ -479,154 +436,10 @@ aligned_survey_plot
 
 
 
-ggsave(filename = "dens_bio_size_plot_comb_3b.pdf", 
+ggsave(filename = "dens_bio_size_plot_comb.pdf", 
        plot = aligned_survey_plot,
        width = 20, 
        height = 20,
-       units = "cm",
-       dpi = 300,
-       family = "sans",
-       useDingbats=FALSE)
-
-
-###older plots:
-##need to align boxplots, because different widths (because different decimal places in y-axis)
-dens_comb_plot <-
-  ggdraw() + 
-  draw_plot(dens_boxplot_no0, x = 0, y = 0, width = 0.5, height = 1) +
-  draw_plot(dens_post_plot,  x = 0.5, y = 0, width = 0.5, height = 1) 
-dens_comb_plot
-
-bio_comb_plot <-
-  ggdraw() + 
-  draw_plot(bio_boxplot_no0, x = 0, y = 0, width = 0.5, height = 1) +
-  draw_plot(bio_post_plot,  x = 0.5, y = 0, width = 0.5, height = 1) 
-bio_comb_plot
-
-size_comb_plot <-
-  ggdraw() + 
-  draw_plot(size_hist, x = 0, y = 0, width = 0.5, height = 1) +
-  draw_plot(size_post_plot,  x = 0.5, y = 0, width = 0.5, height = 1) 
-size_comb_plot
-
-
-aligned_survey_plot2<-plot_grid(dens_comb_plot, bio_comb_plot, size_comb_plot,
-                    ncol = 1, align = c("v", "h"))
-aligned_survey_plot2
-
-
-ggsave(filename = "dens_bio_size_plot_comb_june2.pdf", 
-       plot = aligned_survey_plot2,
-       width = 25, 
-       height = 25,
-       units = "cm",
-       dpi = 300,
-       family = "sans",
-       useDingbats=FALSE)
-
-#####
-
-aligned_survey_plot<-plot_grid(dens_boxplot_no0, dens_post_plot, bio_boxplot_no0, bio_post_plot, size_hist, 
-                    size_post_plot, 
-                    ncol = 2, align = c("v", "h"))
-aligned_survey_plot
-
-
-ggsave(filename = "dens_bio_size_plot_comb.pdf", 
-       plot = aligned_survey_plot,
-       width = 17, 
-       height = 17,
-       units = "cm",
-       dpi = 300,
-       family = "sans",
-       useDingbats=FALSE)
-
-
-###set scales for posterior plots to be the same: 
-bio_post_plot2<-
-biomass_mod %>%
-  spread_draws(b_treatment_bNo_rats) %>%
- # mutate(exp_b=exp(b_treatment_bNo_rats))%>%
-  ggplot(aes(y = 0, x = b_treatment_bNo_rats, fill = stat(x < 0))) +
-  stat_halfeyeh(point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
-  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  theme_bw() + 
-  xlab("Biomass")+
-  ylab("") +
-  scale_y_continuous(NULL, breaks = NULL) +
-  scale_x_continuous(limits=c(-2.5, 8.5), breaks=seq(-2, 8,2))+
-  theme(panel.grid.major = element_blank(), # remove gridlines
-        panel.grid.minor = element_blank(), #remove gridlines
-        strip.background = element_blank(), 
-        legend.position = "none",  
-        rect = element_rect(fill = "transparent"),  
-        plot.background = element_rect(fill = "transparent", color = NA),
-        text=element_text(size=16,  family="sans"),
-        axis.title.y = element_text(size=16, face="bold"))
-bio_post_plot2
-
-
-
-dens_post_plot2<-
-density_mod %>%
-  spread_draws(b_treatment_bNo_rats) %>%
- # mutate(exp_b=exp(b_treatment_bNo_rats))%>%
-  ggplot(aes(y = 0, x = b_treatment_bNo_rats, fill = stat(x < 0))) +
-  stat_halfeyeh(point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
-  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  theme_bw() + 
-  xlab("Density")+
-  ylab("") +
-  scale_y_continuous(NULL, breaks = NULL) +
-  scale_x_continuous(limits=c(-2.5, 8.5), breaks=seq(-2, 8,2))+
-  theme(panel.grid.major = element_blank(), # remove gridlines
-        panel.grid.minor = element_blank(), #remove gridlines
-        strip.background = element_blank(), 
-        legend.position = "none",  
-        rect = element_rect(fill = "transparent"),  
-        plot.background = element_rect(fill = "transparent", color = NA),
-        text=element_text(size=16,  family="sans"),
-        axis.title.y = element_text(size=16, face="bold"))
-dens_post_plot2
-
-
-size_post_plot2<-
-size_mod_ex_gaus_wprior %>%
-  spread_draws(b_treatment_bNo_rats) %>%
- # mutate(exp_b=exp(b_treatment_bNo_rats))%>%
-  ggplot(aes(y = 0, x = b_treatment_bNo_rats, fill = stat(x < 0))) +
-  stat_halfeyeh(point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
-  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  theme_bw() + 
-  xlab("Length")+
-  ylab("") +
-  scale_y_continuous(NULL, breaks = NULL) +
-  scale_x_continuous(limits=c(-2.5, 8.5), breaks=seq(-2, 8,2))+
-  theme(panel.grid.major = element_blank(), # remove gridlines
-        panel.grid.minor = element_blank(), #remove gridlines
-        strip.background = element_blank(), 
-        legend.position = "none",  
-        rect = element_rect(fill = "transparent"),  
-        plot.background = element_rect(fill = "transparent", color = NA),
-        text=element_text(size=16,  family="sans"),
-        axis.title.y = element_text(size=16, face="bold"))
-size_post_plot2
-
-
-
-aligned_survey_plot2<-plot_grid(dens_boxplot_no0, dens_post_plot2, bio_boxplot_no0, bio_post_plot2, size_hist, 
-                    size_post_plot2, 
-                    ncol = 2, align = c("v", "h"))
-aligned_survey_plot2
-
-
-ggsave(filename = "dens_bio_size_plot_comb2.pdf", 
-       plot = aligned_survey_plot2,
-       width = 17, 
-       height = 17,
        units = "cm",
        dpi = 300,
        family = "sans",

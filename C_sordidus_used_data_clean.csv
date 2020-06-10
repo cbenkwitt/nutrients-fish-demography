@@ -1,0 +1,117 @@
+sample_ID,collection_date,atoll,island,treatment,phase,fork_length_cm,whole_wt_kg,sex,macro_stage,gonad_lobes,gonad weight_g,histo_stage,otolith_wt_g,age_final,N15,N_percent
+CSo-001,04-Mar-19,Peros Banhos,Ile AnglaisePB,ratty,IP,22.7,0.24,f,unk,0,na,na,0.02073,6,,
+CSo-002,04-Mar-19,Peros Banhos,Ile AnglaisePB,ratty,IP,21.5,0.19,f,unk,0,na,na,0.01495,3,,
+CSo-003,04-Mar-19,Peros Banhos,Ile AnglaisePB,ratty,IP,22.2,0.23,f,unk,0,na,na,0.01843,5,,
+CSo-015,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,25,0.31,f,active,2,2.4,3,0.02628,6,9.87,13.49
+CSo-016,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,21.8,0.23,f,active,2,2.9,3,0.01988,6,9.66,14.21
+CSo-017,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,22.6,0.21,f,active,2,1.6,3,0.02079,5,9.96,13.61
+CSo-018,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,22.3,0.27,f,active,2,2.7,3,0.02003,6,9.67,13.5
+CSo-019,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,21.8,0.19,f,active,2,2.2,3,0.01934,5,9.9,12.98
+CSo-020,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,22.2,0.23,f,immature,2,0.2,na,0.01557,5,,
+CSo-021,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,24.3,0.27,f,active,2,4,3,0.02231,6,9.91,13.53
+CSo-022,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,20.2,0.16,f,active,2,1.6,3,0.01542,3,9.8,13.54
+CSo-023,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,20.4,0.18,f,active,2,2.7,3,0.01337,3,10.16,13.41
+CSo-024,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,21.6,0.2,f,active,2,2.3,3,0.01727,5,10.18,13.48
+CSo-025,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,22.2,0.25,f,active,2,3.1,3,0.01932,4,9.87,13.21
+CSo-026,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,22.4,0.23,f,active,2,2.7,3,0.01965,5,9.58,14.02
+CSo-027,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,22.4,0.24,f,active,2,2.6,3,0.01845,4,9.88,13.75
+CSo-028,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,20.5,0.2,f,active,2,1.8,3,0.01397,4,9.43,14.26
+CSo-029,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,18.2,0.13,f,active,2,3.5,3,0.01029,2,10.09,13.96
+CSo-030,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,19.6,0.16,f,active,2,1.5,3,0.01145,2,10.13,14.23
+CSo-031,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,21.5,0.21,f,active,2,2.1,3,0.01511,2,9.6,14.31
+CSo-032,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,22.4,0.24,f,active,1,1,na,0.02053,5,9.86,13.57
+CSo-034,05-Mar-19,Peros Banhos,Diamante PB,ratty,IP,24.4,0.31,f,active,2,2.7,3,0.02309,6,10.12,13.35
+CSo-036,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,22.1,0.22,f,active,2,6.3,3,0.01834,4,8.9,13.88
+CSo-037,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,20.8,0.18,f,active,2,3.3,3,0.01327,3,8.86,13.99
+CSo-038,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,19.6,0.15,f,active,2,2.2,3,0.01156,2,9.28,13.82
+CSo-039,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,21.4,0.2,f,active,2,2.9,3,0.01866,5,8.5,13.6
+CSo-040,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,21.7,0.21,f,active,2,3.1,3,0.01645,4,8.6,14.25
+CSo-041,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,21.5,0.2,f,active,2,2.7,3,0.01871,4,9.03,14.13
+CSo-042,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,20.9,0.19,f,active,2,3.5,3,0.01408,3,8.99,13.6
+CSo-043,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,21.1,0.2,f,active,2,2.8,3,0.01662,4,9.58,13.63
+CSo-044,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,21.4,0.19,f,active,2,2.1,3,0.01711,4,9.44,14.07
+CSo-045,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,21.8,0.2,f,active,2,2.9,3,0.01642,3,9.25,14.22
+CSo-046,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,23.6,0.24,f,active,2,3.8,3,0.02406,6,8.91,14.25
+CSo-047,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,20.8,0.18,f,active,2,2.1,3,0.01615,4,9.07,13.98
+CSo-048,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,24.2,0.29,f,active,2,3.4,3,0.02163,6,8.78,14.2
+CSo-049,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,20.8,0.2,f,active,2,4.3,3,0.00808,2,9.57,14.15
+CSo-050,07-Mar-19,Peros Banhos,Ile Poule,ratty,IP,20.2,0.16,f,active,2,3.1,3,0.01267,3,9.42,14.07
+CSo-071,09-Mar-19,Peros Banhos,Grand Ile Coquillage,birdy,IP,26.8,0.37,f,active,2,3.6,3,0.02072,5,8.89,14.41
+CSo-072,09-Mar-19,Peros Banhos,Grand Ile Coquillage,birdy,IP,22.5,0.23,f,active,2,1.6,3,0.016,4,9.56,14.12
+CSo-073,09-Mar-19,Peros Banhos,Grand Ile Coquillage,birdy,IP,20.8,0.17,f,active,2,0.8,3,0.01014,1,9.53,13.86
+CSo-074,09-Mar-19,Peros Banhos,Grand Ile Coquillage,birdy,IP,22.6,0.23,f,active,2,4.3,3,0.01712,3,9.87,13.87
+CSo-075,09-Mar-19,Peros Banhos,Grand Ile Coquillage,birdy,IP,25.5,0.33,f,active,2,4.4,3,0.02372,5,9.39,14.11
+CSo-076,09-Mar-19,Peros Banhos,Grand Ile Coquillage,birdy,IP,24.6,0.28,f,active,2,3,3,0.03211,6,9.76,14.36
+CSo-077,09-Mar-19,Peros Banhos,Grand Ile Coquillage,birdy,IP,19.1,0.16,f,active,2,1.1,3,0.00972,2,9.67,14.25
+CSo-078,09-Mar-19,Peros Banhos,Grand Ile Coquillage,birdy,IP,23.6,0.27,f,active,2,3.5,3,0.01674,3,9.7,13.76
+CSo-079,09-Mar-19,Peros Banhos,Grand Ile Coquillage,birdy,IP,24.5,0.3,f,active,2,4,3,0.01575,4,9.79,13.85
+CSo-080,09-Mar-19,Peros Banhos,Grand Ile Coquillage,birdy,IP,22.5,0.25,f,inactive,2,0.3,2,0.01297,2,,
+CSo-081,09-Mar-19,Peros Banhos,Grand Ile Coquillage,birdy,IP,19.3,0.15,f,active,2,0.9,3,0.00959,2,9.58,14.34
+CSo-082,09-Mar-19,Peros Banhos,Grand Ile Coquillage,birdy,IP,21.4,0.2,f,active,2,2.6,3,0.01209,2,9.83,14.11
+CSo-083,09-Mar-19,Peros Banhos,Petite Ile Coquillage,birdy,IP,24.4,0.26,f,active,2,2.3,3,0.01598,5,9.68,14.44
+CSo-084,09-Mar-19,Peros Banhos,Petite Ile Coquillage,birdy,IP,24.3,0.3,f,inactive,2,0.4,na,0.01541,3,,
+CSo-085,09-Mar-19,Peros Banhos,Petite Ile Coquillage,birdy,IP,20.9,0.2,f,inactive,2,0.5,2,0.01076,2,,
+CSo-086,09-Mar-19,Peros Banhos,Petite Ile Coquillage,birdy,IP,26.3,0.39,f,inactive,2,1.2,3,0.02166,4,,
+CSo-087,09-Mar-19,Peros Banhos,Petite Ile Coquillage,birdy,IP,23.5,0.28,f,active,2,3.3,3,0.01403,3,9.5,13.84
+CSo-088,09-Mar-19,Peros Banhos,Petite Ile Coquillage,birdy,IP,21.3,0.18,f,active,2,0.7,1,0.01199,2,9.97,13.81
+CSo-089,09-Mar-19,Peros Banhos,Petite Ile Coquillage,birdy,IP,21.8,0.23,f,active,2,1.8,3,0.01767,4,9.62,14.24
+CSo-090,09-Mar-19,Peros Banhos,Petite Ile Coquillage,birdy,IP,24.2,0.29,f,inactive,2,0.7,na,0.01706,3,,
+CSo-091,09-Mar-19,Peros Banhos,Petite Ile Coquillage,birdy,IP,24.7,0.29,f,active,2,1,3,0.02171,7,9.06,14.18
+CSo-092,09-Mar-19,Peros Banhos,Petite Ile Coquillage,birdy,IP,23.7,0.3,f,inactive,2,0.7,1,0.01804,4,,
+CSo-093,09-Mar-19,Peros Banhos,Petite Ile Coquillage,birdy,IP,22.5,0.56,f,active,2,2,3,0.01567,3,9.51,13.81
+CSo-094,09-Mar-19,Peros Banhos,Petite Ile Coquillage,birdy,IP,24,0.64,f,active,2,2.1,3,0.02204,5,9.37,14.14
+CSo-095,10-Mar-19,Salomon,Ile de la Passe,birdy,IP,20.9,0.18,f,active,2,1,3,0.01679,5,9.39,14.22
+CSo-096,10-Mar-19,Salomon,Ile de la Passe,birdy,IP,19.2,0.14,f,active,2,0.7,3,0.01036,2,9.04,14.57
+CSo-098,10-Mar-19,Salomon,Ile de la Passe,birdy,IP,21.6,0.22,f,active,2,1.2,3,0.02151,8,8.9,14.52
+CSo-099,10-Mar-19,Salomon,Ile de la Passe,birdy,IP,18.9,0.14,f,active,2,1.6,3,0.01269,2,8.68,14.6
+CSo-100,10-Mar-19,Salomon,Ile de la Passe,birdy,IP,15.2,0.06,f,active,2,1,3,0.00918,3,8.86,14.52
+CSo-101,10-Mar-19,Salomon,Ile de la Passe,birdy,IP,20.4,0.16,f,active,2,0.8,3,0.01626,3,7.77,14.22
+CSo-102,10-Mar-19,Salomon,Ile de la Passe,birdy,IP,19,0.12,f,active,2,0.3,3,0.01003,2,8.36,14.43
+CSo-103,10-Mar-19,Salomon,Ile de la Passe,birdy,IP,18.8,0.12,f,active,2,0.8,3,0.01337,2,7.42,14.13
+CSo-104,10-Mar-19,Salomon,Ile de la Passe,birdy,IP,20,0.17,f,inactive,2,0.4,na,0.01511,3,,
+CSo-105,10-Mar-19,Salomon,Ile de la Passe,birdy,IP,21.5,0.21,f,active,2,0.2,na,0.01423,3,7.87,14.57
+CSo-106,10-Mar-19,Salomon,Ile de la Passe,birdy,IP,17.9,0.11,f,active,2,1,3,0.01065,2,8.02,14.28
+CSo-107,10-Mar-19,Salomon,Ile de la Passe,birdy,IP,18.3,0.12,f,active,2,1.9,3,0.01239,3,7.95,14.32
+CSo-108,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,21.5,0.23,f,active,2,3.4,3,0.01596,4,8.57,14.17
+CSo-109,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,20.4,0.18,f,active,2,0.8,3,0.01418,3,8.43,13.73
+CSo-110,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,19.9,0.18,f,active,2,1.4,3,0.01236,3,8.41,14.4
+CSo-111,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,20.8,0.18,f,active,2,3,3,0.01448,4,8.34,14.18
+CSo-112,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,19.2,0.14,f,active,2,0.4,3,0.01206,3,7.71,14.26
+CSo-113,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,18.1,0.13,f,active,2,0.7,3,0.01082,3,8.32,14.3
+CSo-114,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,18.1,0.13,f,inactive,2,0.2,na,0.01003,3,,
+CSo-115,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,17,0.12,f,inactive,2,0.3,na,0.00963,3,,
+CSo-117,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,15.7,0.1,f,active,2,0.7,3,0.00749,2,8.17,13.78
+CSo-118,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,19.1,0.14,f,active,2,1.2,3,0.01274,4,8.27,13.75
+CSo-119,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,20.9,0.18,f,active,2,1.4,3,0.01474,4,7.61,14.21
+CSo-120,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,18.6,0.16,f,active,2,1.3,3,0.01181,3,7.74,14.45
+CSo-121,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,18.4,0.15,f,active,2,1.3,3,0.01379,3,8.53,13.71
+CSo-122,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,19.5,0.17,f,active,2,1.5,3,0.01281,3,7.76,13.69
+CSo-123,10-Mar-19,Salomon,Ile Anglaise Sal,ratty,IP,17.3,0.13,f,active,2,2.3,3,0.00878,2,8.16,13.55
+CSo-124,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,22.6,0.22,f,active,2,3.3,3,0.0142,3,9.24,14.23
+CSo-125,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,23.6,0.25,f,active,2,2.9,3,0.01781,5,9.04,14.31
+CSo-126,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,20.9,0.18,f,active,2,1.5,3,0.01202,2,9.53,14.43
+CSo-127,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,22.6,0.27,f,active,2,3.1,3,0.02342,7,8.9,14.25
+CSo-128,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,23.4,0.25,f,active,2,3.5,3,0.019,6,9.03,13.99
+CSo-129,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,22.4,0.21,f,inactive,2,0.8,2,0.01505,4,,
+CSo-130,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,22.6,0.24,f,active,2,2.1,3,0.01699,4,8.89,13.87
+CSo-131,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,24.5,0.32,f,active,2,3.1,3,0.02619,8,8.93,13.99
+CSo-132,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,19.9,0.18,f,active,2,2.1,3,0.01192,2,9.04,14.05
+CSo-133,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,22.3,0.21,f,active,2,1.5,3,0.01969,6,8.77,14.29
+CSo-134,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,24.4,0.27,f,unk,0,na,na,0.0158,3,,
+CSo-135,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,24.3,0.3,f,active,2,1.8,3,0.03153,8,9.05,14.07
+CSo-136,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,20.5,0.19,f,active,2,2.1,3,0.01642,3,8.67,14.04
+CSo-137,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,20,0.17,f,active,2,2,3,0.01303,4,8.44,14.16
+CSo-138,14-Mar-19,Great Chagos Bank,Middle Brother,birdy,IP,17.7,0.11,f,active,2,1.4,3,0.00803,2,9.34,14.01
+CSo-139,16-Mar-19,Great Chagos Bank,Eagle Island,ratty,IP,22.5,0.25,f,inactive,2,0.6,2,0.01614,2,,
+CSo-140,16-Mar-19,Great Chagos Bank,Eagle Island,ratty,IP,22.3,0.23,f,active,2,2.9,3,0.01647,4,9.34,14.15
+CSo-141,16-Mar-19,Great Chagos Bank,Eagle Island,ratty,IP,19.8,0.16,f,active,2,1.7,3,0.01071,5,9.35,14.03
+CSo-144,16-Mar-19,Great Chagos Bank,Eagle Island,ratty,IP,19.2,0.14,f,immature,2,0.1,na,0.00973,2,,
+CSo-145,16-Mar-19,Great Chagos Bank,Eagle Island,ratty,IP,19.8,0.17,f,active,2,3.2,3,0.01552,6,9.1,14.04
+CSo-146,16-Mar-19,Great Chagos Bank,Eagle Island,ratty,IP,19.3,0.16,f,active,2,2.4,3,0.01121,2,9.18,13.84
+CSo-147,16-Mar-19,Great Chagos Bank,Eagle Island,ratty,IP,20.7,0.19,f,active,2,1.9,3,0.01755,4,9.03,14.34
+CSo-148,16-Mar-19,Great Chagos Bank,Eagle Island,ratty,IP,18.1,0.12,f,active,2,1.7,3,0.00842,1,9.23,13.79
+CSo-149,16-Mar-19,Great Chagos Bank,Eagle Island,ratty,IP,20.2,0.17,f,active,2,2.9,3,0.0145,3,9.16,14.07
+CSo-150,16-Mar-19,Great Chagos Bank,Eagle Island,ratty,IP,20.8,0.19,f,active,2,2.8,3,0.0148,4,9.45,14.37
+CSo-151,16-Mar-19,Great Chagos Bank,Eagle Island,ratty,IP,17.9,0.11,f,active,2,1.5,3,0.00883,2,9.3,14.21
+CSo-152,16-Mar-19,Great Chagos Bank,Eagle Island,ratty,IP,14,0.05,f,immature,0,0,na,0.00596,1,,
+CSo-153,16-Mar-19,Great Chagos Bank,Eagle Island,ratty,IP,21,0.2,f,active,2,2.8,3,0.01564,5,9.22,14.1
