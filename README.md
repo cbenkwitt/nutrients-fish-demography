@@ -44,3 +44,4 @@ Column metadata:
  $ Biomass    : biomass of individual fish, kg/ha, num
  $ Abundance  : density of individaul fish, ind/ha, num 
  
+Please contact Dr. Casey Benkwitt (c.benkwitt@lancaster.ac.uk) for any questions or to inquire about using these data.
