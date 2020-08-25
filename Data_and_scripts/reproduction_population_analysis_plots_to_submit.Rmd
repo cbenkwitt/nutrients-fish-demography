@@ -340,6 +340,14 @@ popn_gonad_post_plot
 
 ###combine plots and save
 ```{r}
+#plots from other file for individuals:
+ind_rep_plot <-
+  ggdraw() + 
+  draw_plot(gw_length_plot, x = 0, y = 0, width = 0.52, height = 1) +
+  draw_plot(gwl_post_plot,  x = 0.52, y = 0, width = 0.47, height = 1) 
+ind_rep_plot
+
+#plots from this file:
 popn_rep_plot <-
   ggdraw() + 
   draw_plot(popn_gonad_boxplot_no0, x = 0, y = 0, width = 0.52, height = 1) +
@@ -347,10 +355,13 @@ popn_rep_plot <-
 popn_rep_plot
 
 
-ggsave(filename = "popn_gonad_plot_combined.pdf", 
-       plot = popn_rep_plot,
+gw_popn_ind_plots_comb<-plot_grid(ind_rep_plot, popn_rep_plot, ncol = 1, align = "v")
+gw_popn_ind_plots_comb
+
+ggsave(filename = "gw_popn_ind_plots_comb_aug6.pdf", 
+       plot = gw_popn_ind_plots_comb,
        width = 20, 
-       height = 6.66,
+       height = 15,
        units = "cm",
        dpi = 300,
        family = "sans",

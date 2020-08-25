@@ -37,27 +37,27 @@ cso_dat_lfm$treatment_b<-relevel(cso_dat_lfm$treatment, "ratty")
 
 
 #Final models (earlier versions built up models slowly, compared distributions for best fit, compared different priors, etc. - all came to same conclusions)
-#Fecundity ~ Length
+#GSI~Length
 ```{r}
 
-gw_length_mod <- 
+gsi_length_mod <- 
   brm(data = cso_dat_lfm, family = gaussian,
-      gonad.weight_g  ~ c_length+treatment_b + (1|atoll),
-      prior = c(prior(normal(2,10), class = Intercept), ###weakly informative prior
-                prior(lognormal(0, 1), class = "b", coef = "c_length"), #this has to be above 0 (positive relationship between gonad weight-length)
-                prior(normal(0, 10), class = "b", coef = "treatment_bbirdy")), #weakly informative prior
+      GSI  ~ c_length+treatment_b + (1|atoll),
+      prior = c(prior(normal(1,1), class = Intercept), ###weakly informative prior based on mean and range of GSI
+                prior(normal(0, 1), class = "b", coef = "c_length"), #this DOESN'T have to be above 0, unlike gonad weight - so weakly informative
+                prior(normal(0, 1), class = "b", coef = "treatment_bbirdy")), #weakly informative prior
       iter = 3000, warmup = 1000, chains = 4, cores = 4,
       control = list(adapt_delta = 0.999, max_treedepth = 15), 
       sample_prior="yes",
-      file = "gw_length_mod")
-print(gw_length_mod)
-plot(gw_length_mod)
-pp_check(gw_length_mod)
+      file = "gsi_length_mod")
+print(gsi_length_mod)
+plot(gsi_length_mod)
+pp_check(gsi_length_mod)
 ##all looks good
-prior_summary(gw_length_mod)
+
 
 #check plots of priors and posterior versus prior distributions: 
-gw_length_mod %>% 
+gsi_length_mod %>% 
   prior_summary() %>% #don't need this line when plotting priors before running the model
   mutate(label = pmap_chr(select(., -prior), paste)) %>% 
   parse_dist(prior) %>% 
@@ -67,22 +67,21 @@ gw_length_mod %>%
   facet_wrap(~ label, scales = "free_x")
 
 #intercept:
-posterior_samples(gw_length_mod) %>% 
+posterior_samples(gsi_length_mod) %>% 
   select(b_Intercept, prior_Intercept) %>% 
   gather(Type, value) %>% 
     ggplot(aes(value, col=Type)) +
     geom_density()
-#pretty close match....
 
 #slope (length):
-posterior_samples(gw_length_mod) %>% 
+posterior_samples(gsi_length_mod) %>% 
   select(b_c_length, prior_b_c_length) %>% 
   gather(Type, value) %>% 
     ggplot(aes(value, col=Type)) +
     geom_density()
 
 #slope (rat):
-posterior_samples(gw_length_mod) %>% 
+posterior_samples(gsi_length_mod) %>% 
   select(b_treatment_bbirdy, prior_b_treatment_bbirdy) %>% 
   gather(Type, value) %>% 
     ggplot(aes(value, col=Type)) +
@@ -90,18 +89,20 @@ posterior_samples(gw_length_mod) %>%
 
 
 #Compile posterior distributions:
-gw_length_post <- posterior_samples(gw_length_mod)
-median_hdi(gw_length_post$b_treatment_bbirdy, .width = .95) #median estimate = -0.59, ymin - -0.95, ymax = -0.23
+gsi_length_post <- posterior_samples(gsi_length_mod)
+median_hdi(gsi_length_post$b_treatment_bbirdy, .width = .95) #median estimate = -0.25, ymin - -0.45, ymax = -0.07
 
 #test hypothesis that birdy effect is > 0
-hypothesis(gw_length_mod, "treatment_bbirdy>0") #evidence ratio, posterior probability = 0 that birdy > ratty.
-hypothesis(gw_length_mod, "treatment_bbirdy<0") #So posterior probability = 1 that ratty > birdy (evidence ratio = 726.27)
-
+hypothesis(gsi_length_mod, "treatment_bbirdy>0") #posterior probability = 0 that birdy > ratty.
+hypothesis(gsi_length_mod, "treatment_bbirdy<0") #So posterior probability = 1 that ratty > birdy (evidence ratio = 215.22)
 
 ##percent difference
-(-.59)/((2.48+2.48-.59)/2) ###27%
+(-0.25)/((1.19+1.19-0.25)/2) ###23.47%
 
+##test whether any relationship bw GSI and length
+hypothesis(gsi_length_mod, "c_length<0") #posterior probability = 0.97 that slope < 0 - slight decrease in GSI with increasing length...
 ```
+
 
 #Weight-Length
 ```{r}
@@ -190,21 +191,20 @@ hypothesis(lw_mod_ll_int, "`llength:treatment_bbirdy` > 0") #equivalent to line 
 
 ##plot of birdy treatment effect
 
-
-##length-gonad
-gwl_post_plot<-
-gw_length_mod %>%
+##length-gsi
+gsi_post_plot<-
+gsi_length_mod %>%
   spread_draws(b_treatment_bbirdy) %>%
   ggplot(aes(y = 0, x = b_treatment_bbirdy, fill = stat(x < 0))) +
   stat_halfeyeh(point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
   scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
   geom_vline(xintercept = 0, linetype = "dashed") +
   theme_bw() + 
-  xlab("Gonad weight")+ 
+  xlab("GSI")+ 
   ylab("") +
   scale_y_continuous(NULL, breaks = NULL) +
  # scale_x_continuous(limits=c(-1.4, 0.25), breaks=seq(-1.4, 0.2, .2), labels = scales::number_format(accuracy = 0.1))+
-  scale_x_continuous(limits=c(-1.5, .2), breaks=seq(-1.5, .2,.5), labels = scales::number_format(accuracy = 0.1))+
+ # scale_x_continuous(limits=c(-1.5, .2), breaks=seq(-1.5, .2,.5), labels = scales::number_format(accuracy = 0.1))+
   theme(panel.grid.major = element_blank(), # remove gridlines
         panel.grid.minor = element_blank(), #remove gridlines
         strip.background = element_blank(), 
@@ -213,8 +213,7 @@ gw_length_mod %>%
         plot.background = element_rect(fill = "transparent", color = NA),
         text=element_text(size=16,  family="sans"),
         axis.text.x = element_text(size=16))
-gwl_post_plot
-
+gsi_post_plot
 
 
 ##length-weight: a
@@ -298,20 +297,21 @@ lwab_post_plot
 ##Plots - now with raw data and estimated regression lines
 ```{r}
 
-###gw-length
-gw_length_plot<-
+###gsi-length
+gsi_length_plot<-
 cso_dat_lfm %>%
   group_by(treatment_b) %>%
-  add_fitted_draws(gw_length_mod, re_formula=NA) %>% #re_formula = NA to deal with random effects
-  ggplot(aes(x = fork_length_cm, y = gonad.weight_g, color = treatment_b, fill = treatment_b,  alpha = 0.6)) +
+  add_fitted_draws(gsi_length_mod, re_formula=NA) %>% #re_formula = NA to deal with random effects
+  ggplot(aes(x = fork_length_cm, y = GSI, color = treatment_b, fill = treatment_b,  alpha = 0.6)) +
   geom_point(data = cso_dat_lfm, size = 3, aes(shape = ordered(treatment_b)))+
   stat_lineribbon(aes(y = .value), .width=0) +
   scale_fill_manual(values = c( "#DC3220","#005AB5")) + 
   scale_color_manual(values = c("#DC3220", "#005AB5")) +   
   scale_shape_manual(values = c(23,21)) + 
+  scale_y_continuous(breaks=seq(0.5, 2.5, .5), labels = scales::number_format(accuracy = 0.1))+
   theme_bw() + 
   xlab("Length (cm)")+
-  ylab("Gonad weight (g)") +
+  ylab("GSI") +
   theme(panel.grid.major = element_blank(), # remove gridlines
         panel.grid.minor = element_blank(), #remove gridlines
         strip.background = element_blank(), 
@@ -320,7 +320,7 @@ cso_dat_lfm %>%
         plot.background = element_rect(fill = "transparent", color = NA),
         text=element_text(size=16,  family="sans"),
         axis.text.x = element_text(size=16))
-gw_length_plot
+gsi_length_plot
 
 
 
@@ -353,11 +353,11 @@ lw_plot
 ##Combine plots
 ```{r}
 
-gwl_comb_plot <-
+gsi_comb_plot <-
   ggdraw() + 
-  draw_plot(gw_length_plot, x = 0, y = 0, width = 0.5, height = 1) +
-  draw_plot(gwl_post_plot,  x = 0.5, y = 0, width = 0.5, height = 1) 
-gwl_comb_plot
+  draw_plot(gsi_length_plot, x = 0, y = 0, width = 0.5, height = 1) +
+  draw_plot(gsi_post_plot,  x = 0.5, y = 0, width = 0.5, height = 1) 
+gsi_comb_plot
 
 
 lw_comb_plot <-
@@ -370,9 +370,191 @@ lw_comb_plot
 ```
 
 
+#gonad weight~length (for supporting information - population-level analysis)
+```{r}
+gw_length_mod <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      gonad.weight_g  ~ c_length+treatment_b + (1|atoll),
+      prior = c(prior(normal(2,10), class = Intercept), ###weakly informative prior
+                prior(lognormal(0, 1), class = "b", coef = "c_length"), #this has to be above 0 (positive relationship between gonad weight-length)
+                prior(normal(0, 10), class = "b", coef = "treatment_bbirdy")), #weakly informative prior
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "gw_length_mod")
+print(gw_length_mod)
+plot(gw_length_mod)
+pp_check(gw_length_mod)
+##all looks good
+prior_summary(gw_length_mod)
+
+#check plots of priors and posterior versus prior distributions: 
+gw_length_mod %>% 
+  prior_summary() %>% #don't need this line when plotting priors before running the model
+  mutate(label = pmap_chr(select(., -prior), paste)) %>% 
+  parse_dist(prior) %>% 
+  ggplot(aes(y = 0, dist = .dist, args = .args)) + 
+  stat_dist_halfeyeh() + 
+  geom_text(aes(label = prior), x = 0, y = .97) + 
+  facet_wrap(~ label, scales = "free_x")
+
+#intercept:
+posterior_samples(gw_length_mod) %>% 
+  select(b_Intercept, prior_Intercept) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+#pretty close match....
+
+#slope (length):
+posterior_samples(gw_length_mod) %>% 
+  select(b_c_length, prior_b_c_length) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope (rat):
+posterior_samples(gw_length_mod) %>% 
+  select(b_treatment_bbirdy, prior_b_treatment_bbirdy) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+
+#Compile posterior distributions:
+gw_length_post <- posterior_samples(gw_length_mod)
+median_hdi(gw_length_post$b_treatment_bbirdy, .width = .95) #median estimate = -0.59, ymin - -0.95, ymax = -0.23
+
+#test hypothesis that birdy effect is > 0
+hypothesis(gw_length_mod, "treatment_bbirdy>0") #evidence ratio, posterior probability = 0 that birdy > ratty.
+hypothesis(gw_length_mod, "treatment_bbirdy<0") #So posterior probability = 1 that ratty > birdy (evidence ratio = 726.27)
+
+
+##percent difference
+(-.59)/((2.48+2.48-.59)/2) ###27%
+
+##length-gonad posterior plot
+gwl_post_plot<-
+gw_length_mod %>%
+  spread_draws(b_treatment_bbirdy) %>%
+  ggplot(aes(y = 0, x = b_treatment_bbirdy, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=.95, fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Gonad weight")+ 
+  ylab("") +
+  scale_y_continuous(NULL, breaks = NULL) +
+ # scale_x_continuous(limits=c(-1.4, 0.25), breaks=seq(-1.4, 0.2, .2), labels = scales::number_format(accuracy = 0.1))+
+  scale_x_continuous(limits=c(-1.5, .2), breaks=seq(-1.5, .2,.5), labels = scales::number_format(accuracy = 0.1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+gwl_post_plot
+
+
+###gw-length plot - raw data plus regression lines
+gw_length_plot<-
+cso_dat_lfm %>%
+  group_by(treatment_b) %>%
+  add_fitted_draws(gw_length_mod, re_formula=NA) %>% #re_formula = NA to deal with random effects
+  ggplot(aes(x = fork_length_cm, y = gonad.weight_g, color = treatment_b, fill = treatment_b,  alpha = 0.6)) +
+  geom_point(data = cso_dat_lfm, size = 3, aes(shape = ordered(treatment_b)))+
+  stat_lineribbon(aes(y = .value), .width=0) +
+  scale_fill_manual(values = c( "#DC3220","#005AB5")) + 
+  scale_color_manual(values = c("#DC3220", "#005AB5")) +   
+  scale_shape_manual(values = c(23,21)) + 
+  theme_bw() + 
+  xlab("Length (cm)")+
+  ylab("Gonad weight (g)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+gw_length_plot
+
+```
+
 
 #Excerpts from older scripts: model comparisons
 ```{r}
+
+###GSI-length models: interaction vs. additive###
+gsi_length_mod_int <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      GSI  ~ c_length*treatment_b + (1|atoll),
+      prior = c(prior(normal(1,1), class = Intercept),
+                prior(normal(0, 1), class = "b", coef = "c_length"), 
+                prior(normal(0, 1), class = "b", coef = "treatment_bbirdy")), 
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "gsi_length_mod_int")
+print(gsi_length_mod_int)
+plot(gsi_length_mod_int)
+pp_check(gsi_length_mod_int)
+
+##compare using loo, waic:
+gsi_length_mod_int<-add_criterion(gsi_length_mod_int, c("waic", "loo"))
+gsi_length_mod<-add_criterion(gsi_length_mod, c("waic", "loo"))
+loo(gsi_length_mod_int, gsi_length_mod)
+model_weights(gsi_length_mod_int, gsi_length_mod, weights = "loo") %>%
+round(digits = 3)
+##definitely no imporvement by including interaction, much more weight given to additive model. 
+##parameter estimates are nearly identical regardless of model, so use simpler additive model. 
+
+###gsi-length models: linear vs. power####
+##linear: 
+mod1_gsi_nt <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      GSI  ~ c_length + (1|atoll),
+      prior = c(prior(normal(0,1), class = Intercept), ###weakly informative prior
+                prior(normal(0, 1), class = "b", coef = "c_length")), 
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "mod1_gsi_nt")
+print(mod1_gsi_nt)
+plot(mod1_gsi_nt)
+pp_check(mod1_gsi_nt)
+
+
+#power:
+prior_nl_gsi<- c(
+  prior(normal(0 , 1), nlpar = "a", lb = 0), ##can be positive or negative, weakly informative
+  prior(normal(0, 1), nlpar = "b", lb = 0) ##can be positive or negative, weakly informative
+)
+
+mod1_gsi_nl <- 
+  brm(
+    bf(
+      GSI ~ a*fork_length_cm^b,
+      a~1, b~1,
+      nl=TRUE),
+    data = cso_dat_lfm, family = gaussian,
+    prior = prior_nl_gsi,
+     iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+    control = list(adapt_delta = 0.999, max_treedepth=15),  
+    sample_prior=TRUE,
+     file = "mod1_gsi_nl"
+  )
+print(mod1_gsi_nl)
+plot(mod1_gsi_nl)
+pp_check(mod1_gsi_nl)
+
+loo(mod1_gsi_nt, mod1_gsi_nl)
+model_weights(mod1_gsi_nt, mod1_gsi_nl,  weights = "loo") %>%
+round(digits = 3)
+##linear model is definitely better fit.
 
 ###gonad weight - length models: linear vs. power#### 
 #first check different shapes for the model fit: 

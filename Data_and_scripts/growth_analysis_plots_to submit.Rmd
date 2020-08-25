@@ -177,31 +177,27 @@ vbgf_comb_plot
 ```
 
 
-##Combine plots with gonad weight, whole weight plots (from other file)
+##Combine plots with gsi, whole weight plots (from other file)
 ```{r}
 
-aligned_raw_plots<-plot_grid(vbgf_plot, gw_length_plot, lw_plot, ncol = 1, align = "hv")
-aligned_raw_plots
+#from other file:
+gsi_comb_plot
+lw_comb_plot
 
-aligned_post_top2<-plot_grid(vbgf_post_plot, gwl_post_plot, ncol = 1, align = "hv")
-aligned_post_top2
-
-###now align top rows with left most of bottom row: 
-post_plots1 <- align_plots(aligned_post_top2, lwa_post_plot, align = 'v', axis = 'l')
-# then build the bottom row
-bottom_row <- plot_grid(post_plots1[[2]], lwb_post_plot, nrow=1)
-###then combine top and bottom:
-post_plots<-plot_grid(post_plots1[[1]], bottom_row, ncol = 1, rel_heights=c(1,.5))
-post_plots
-
-comb_plot <-
+#from this file:
+vbgf_comb_plot <-
   ggdraw() + 
-  draw_plot(aligned_raw_plots, x = 0, y = 0, width = 0.53, height = 1) + # draw_plot(aligned_raw_plots, x = 0, y = 0, width = 0.55, height = 1)
-  draw_plot(post_plots,  x = 0.53, y = 0, width = 0.47, height = 1) #  draw_plot(post_plots,  x = 0.55, y = 0, width = 0.45, height = 1) 
-comb_plot
+  draw_plot(vbgf_plot, x = 0, y = 0, width = 0.5, height = 1) +
+  draw_plot(vbgf_post_plot,  x = 0.5, y = 0, width = 0.5, height = 1) 
+vbgf_comb_plot
 
-ggsave(filename = "figure2_combined.pdf", 
-       plot = comb_plot,
+
+####combine these 3 into one:
+ind_plots_comb<-plot_grid(vbgf_comb_plot, gsi_comb_plot, lw_comb_plot, ncol = 1, align = "v")
+ind_plots_comb
+
+ggsave(filename = "figure2_combined_aug25.pdf", 
+       plot = ind_plots_comb,
        width = 20, 
        height = 20,
        units = "cm",
