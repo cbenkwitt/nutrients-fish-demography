@@ -556,6 +556,168 @@ model_weights(mod1_gsi_nt, mod1_gsi_nl,  weights = "loo") %>%
 round(digits = 3)
 ##linear model is definitely better fit.
 
+
+###gsi-length models: with collection day#### 
+cso_dat_lfm<-
+cso_dat_lfm %>%
+  mutate(collection_day = case_when(collection_date == "05-Mar-19" ~ 5,
+         collection_date == "07-Mar-19"~ 7,
+         collection_date == "09-Mar-19"~ 9,
+         collection_date == "10-Mar-19"~ 10,
+         collection_date == "14-Mar-19"~ 14,
+         collection_date == "16-Mar-19"~ 16))
+
+##center collection day
+cso_dat_lfm <- 
+  cso_dat_lfm %>%
+  mutate(c_day = collection_day - mean(collection_day))
+
+#run model
+gsi_length_day_mod <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      GSI  ~ c_length+treatment_b + c_day+ (1|atoll),
+      prior = c(prior(normal(1,1), class = Intercept), ###weakly informative prior based on mean and range of GSI
+                prior(normal(0, 1), class = "b", coef = "c_length"), #this DOESN'T have to be above 0, unlike gonad weight - so weakly informative
+                prior(normal(0, 1), class = "b", coef = "treatment_bbirdy"), #weakly informative prior
+                prior(normal(0, 1), class = "b", coef = "c_day")), #weakly informative prior
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "gsi_length_day_mod")
+print(gsi_length_day_mod)
+plot(gsi_length_day_mod, ask = FALSE)
+pp_check(gsi_length_day_mod)
+
+#compare to model with collection day, and with none:
+model_weights(gsi_length_day_mod, gsi_length_mod,  weights = "loo") %>%
+round(digits = 3)
+#more weight to model without day in it
+
+#Compile posterior distributions:
+gsi_length_day_post <- posterior_samples(gsi_length_day_mod)
+median_hdi(gsi_length_day_post$b_treatment_bbirdy, .width = .95) #median estimate = -0.27, ymin - -0.48, ymax = -0.08
+###Bird/rat estimate nearly identical to model without collection day (see above)
+
+
+###gsi-age models: linear vs. power#### 
+#linear:
+mod1_gsi_age_nt <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      GSI  ~ c_age + (1|atoll),
+      prior = c(prior(normal(1,1), class = Intercept), ###weakly informative prior based on mean and range of GSI
+                prior(normal(0, 1), class = "b", coef = "c_age")), #this DOESN'T have to be above 0, unlike gonad weight - so weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "mod1_gsi_age_nt")
+print(mod1_gsi_age_nt)
+plot(mod1_gsi_age_nt)
+pp_check(mod1_gsi_age_nt)
+
+plot(marginal_effects(mod1_gsi_age_nt, re_formula=NULL), points=TRUE, ask = FALSE)
+
+
+#power:
+prior_nl_age<- c(
+  prior(normal(0 , 1), nlpar = "a"), ##can be positive or negative, weakly informative
+  prior(normal(0, 1), nlpar = "b") ##can be positive or negative, weakly informative
+)
+mod1_gsi_age_nl <- 
+  brm(
+    bf(
+      GSI ~ a*age_final^b,
+      a~1, b~1,
+      nl=TRUE),
+    data = cso_dat_lfm, family = gaussian,
+    prior = prior_nl_age,
+     iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+    control = list(adapt_delta = 0.999, max_treedepth=15),  
+    sample_prior=TRUE,
+     file = "mod1_gsi_age_nl"
+  )
+print(mod1_gsi_age_nl)
+plot(mod1_gsi_age_nl)
+pp_check(mod1_gsi_age_nl)
+
+
+loo(mod1_gsi_age_nl, mod1_gsi_age_nt)
+model_weights(mod1_gsi_age_nl, mod1_gsi_age_nt,  weights = "loo") %>%
+round(digits = 3)
+##linear model is definitely better fit.
+
+
+
+####gsi-age: additive vs. interaction models####
+#interaction:
+gsi_age_mod_int <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      GSI  ~ c_age*treatment_b + (1|atoll),
+      prior = c(prior(normal(1,1), class = Intercept), ###weakly informative prior
+                prior(normal(0, 1), class = "b", coef = "c_age"), #this has to be above 0 (positive relationship between gonad weight-length)
+                prior(normal(0, 1), class = "b", coef = "treatment_bbirdy")), #weakly informative prior
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "gsi_age_mod_int")
+print(gsi_age_mod_int)
+
+#additive:
+gsi_age_mod_add <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      GSI  ~ c_age+treatment_b + (1|atoll),
+      prior = c(prior(normal(1,1), class = Intercept), #weakly informative prior
+                prior(normal(0, 1), class = "b", coef = "c_age"), #weakly informative prior
+                prior(normal(0, 1), class = "b", coef = "treatment_bbirdy")), #weakly informative prior
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "gsi_age_mod_add")
+print(gsi_age_mod_add)
+
+#Compile posterior distributions:
+gsi_age_mod_add_post <- posterior_samples(gsi_age_mod_add)
+median_hdi(gsi_age_mod_add_post$b_treatment_b, .width = .95) #-0.3121773	-0.4850681	-0.1226342	
+
+
+##compare using loo, waic:
+loo(gsi_age_mod_int, gsi_age_mod_add)
+model_weights(gsi_age_mod_int, gsi_age_mod_add, weights = "loo") %>%
+round(digits = 3)
+##much more weight given to additive model, plus
+##parameter estimates are nearly identical regardless of model, so use simpler additive model. 
+
+####gsi-age with collection day####
+#run model
+gsi_age_day_mod <- 
+  brm(data = cso_dat_lfm, family = gaussian,
+      GSI  ~ c_age+treatment_b + c_day+ (1|atoll),
+      prior = c(prior(normal(1,1), class = Intercept), ###weakly informative prior based on mean and range of GSI
+                prior(normal(0, 1), class = "b", coef = "c_age"), #this DOESN'T have to be above 0, unlike gonad weight - so weakly informative
+                prior(normal(0, 1), class = "b", coef = "treatment_bbirdy"), #weakly informative prior
+                prior(normal(0, 1), class = "b", coef = "c_day")), #weakly informative prior
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "gsi_age_day_mod")
+print(gsi_age_day_mod)
+plot(gsi_age_day_mod, ask = FALSE)
+pp_check(gsi_age_day_mod)
+##all looks good
+
+
+##compare using loo, waic:
+loo(gsi_age_day_mod, gsi_age_mod_add)
+model_weights(gsi_age_day_mod, gsi_age_mod_add, weights = "loo") %>%
+round(digits = 3)
+##much more weight given to additive model, plus
+##parameter estimates are nearly identical regardless of model, so use simpler additive model. 
+
+#look at posterior distributions:
+gsi_age_day_mod_post <- posterior_samples(gsi_age_day_mod)
+median_hdi(gsi_age_day_mod_post$b_treatment_bbirdy, .width = .95) #median estimate = -0.32, ymin = -0.52, ymax = -0.14
+###Bird/rat estimate nearly identical to model with length
+
+
 ###gonad weight - length models: linear vs. power#### 
 #first check different shapes for the model fit: 
 #linear:
