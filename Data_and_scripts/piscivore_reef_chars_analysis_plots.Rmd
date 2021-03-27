@@ -1,0 +1,508 @@
+---
+title: "R Notebook: Piscivore survey analysis AND coral cover and structure"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+###load packages
+```{r}
+library(tidyverse)
+library(brms)
+library(tidybayes)
+library(modelr) #for data_grid function
+library(bayesplot)
+library(gridExtra) #for plots
+library(RColorBrewer) #for plots
+library(cowplot) #for plots
+library(scales) #for plots
+```
+
+
+#Step 1: Load data
+```{r}
+load("piscivore_surveys_data.Rdata")
+str(pisc_only_2018)
+str(pisc_only_sum_2018)
+
+```
+
+
+##run model - biomass
+```{r}
+
+range(pisc_only_sum_2018$lbio) #0.00000 6.51323
+mean(pisc_only_sum_2018$lbio) #2.025132
+median(pisc_only_sum_2018$lbio) #0.5323554
+
+
+pisc_bio_mod_pr <- 
+  brm(data = pisc_only_sum_2018, family = gaussian, 
+      lbio  ~ treatment_b  + (1|Atoll),
+      prior = c(prior(normal(0,10), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(2,10), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "pisc_bio_mod_pr") #3 divergent transitions 
+print(pisc_bio_mod_pr) #no rats> rats
+pp_check(pisc_bio_mod_pr) #looks okay
+plot(pisc_bio_mod_pr, ask = FALSE)
+
+
+pisc_biomass_post <- posterior_samples(pisc_bio_mod_pr)
+median_hdi(pisc_biomass_post$b_treatment_bNo_rats, .width = .95) #1.368307	-0.04408818	2.732334
+median_hdi(exp(pisc_biomass_post$b_treatment_bNo_rats), .width = .95)	#3.928692	0.4190288	12.7302		
+
+hypothesis(pisc_bio_mod_pr, "treatment_bNo_rats>0") #0.97
+
+
+```
+
+##biomass plots (box and posterior)
+```{r}
+
+###boxplots------------
+pisc_bio_box_all<-
+ pisc_only_sum_2018 %>% 
+  mutate(Treatment = factor(Treatment, levels=c("Rats", "No_rats")))  %>% #re-arrange to match posterior plots
+  ggplot(aes(x=Treatment, y=sum_bio, fill=Treatment, alpha = 0.6, shape = Treatment)) + 
+  geom_boxplot(outlier.size=0, outlier.stroke=0) +
+  geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.1)) + 
+  scale_fill_manual(values = c("#DC3220", "#005AB5"))+
+  scale_shape_manual(values = c(23,21)) + 
+  scale_x_discrete(labels=c("rat-infested", "rat-free")) +
+  #scale_y_continuous(trans='log10')+ #plot on log scale because log link in model #, limits=c(0, 1000)
+  theme_bw() + 
+  xlab(" ")+
+  ylab("Piscivore biomass (kg/ha)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+
+
+###posterior distributions------------
+pisc_bio_post_plot<-
+pisc_bio_mod_pr %>%
+  spread_draws(b_treatment_bNo_rats) %>%
+ # mutate(exp_b=exp(b_treatment_bratMfree))%>%
+  ggplot(aes(y = 0, x = b_treatment_bNo_rats, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in log piscivore biomass")+
+  ylab("Posterior density") +
+  scale_y_continuous(breaks = NULL) +
+      scale_x_continuous(limits=c(-2, 10.9), breaks=seq(-2, 10,2))+
+ # scale_x_continuous(limits=c(-2.5, 2.5), breaks=seq(-2, 2,1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+pisc_bio_post_plot
+
+
+###combine plots-----------
+pisc_bio_comb_plot <-
+  ggdraw() + 
+  draw_plot(pisc_bio_box_all, x = 0, y = 0, width = 0.5, height = 1) +
+  draw_plot(pisc_bio_post_plot,  x = 0.5, y = 0, width = 0.5, height = 1) 
+pisc_bio_comb_plot
+
+
+
+```
+
+
+
+##Supplement: run  model - density
+```{r}
+
+range(pisc_only_sum_2018$ldens) #0.000000 6.599462
+mean(pisc_only_sum_2018$ldens) #2.504735
+median(pisc_only_sum_2018$ldens) #2.107543
+
+
+pisc_dens_mod_pr <- 
+  brm(data = pisc_only_sum_2018, family = gaussian, 
+      ldens  ~ treatment_b  + (1|Atoll),
+      prior = c(prior(normal(0,10), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(2.5,10), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "pisc_dens_mod_pr") 
+print(pisc_dens_mod_pr) #no rats> rats
+plot(pisc_dens_mod_pr, ask = FALSE)
+
+hypothesis(pisc_dens_mod_pr, "treatment_bNo_rats>0") #0.90
+
+
+pisc_dens_post <- posterior_samples(pisc_dens_mod_pr)
+median_hdi(pisc_dens_post$b_treatment_bNo_rats, .width = .95) #0.9916492	-0.6027157	2.566562	
+median_hdi(exp(pisc_dens_post$b_treatment_bNo_rats), .width = .95)	#2.695676	0.1635617	9.847889	
+
+```
+
+
+###Density plots - boxplots and posterior distributions
+```{r}
+
+pisc_dens_box_all<-
+ pisc_only_sum_2018 %>% 
+  mutate(Treatment = factor(Treatment, levels=c("Rats", "No_rats")))  %>% #re-arrange to match posterior plots
+  ggplot(aes(x=Treatment, y=sum_dens, fill=Treatment, alpha = 0.6, shape = Treatment)) + 
+  geom_boxplot(outlier.size=0, outlier.stroke=0) +
+  geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.1)) + 
+  scale_fill_manual(values = c("#DC3220", "#005AB5"))+
+  scale_shape_manual(values = c(23,21)) + 
+  scale_x_discrete(labels=c("rat-infested", "rat-free")) +
+ # scale_y_continuous(trans='log10')+ #plot on log scale because log link in model #, limits=c(0, 1000)
+  theme_bw() + 
+  xlab(" ")+
+  ylab("Density (ind/ha)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+pisc_dens_box_all
+
+
+pisc_dens_post_plot<-
+pisc_dens_mod_pr %>%
+  spread_draws(b_treatment_bNo_rats) %>%
+ # mutate(exp_b=exp(b_treatment_bratMfree))%>%
+  ggplot(aes(y = 0, x = b_treatment_bNo_rats, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in log piscivore density")+
+  ylab("Posterior density") +
+  scale_y_continuous(breaks = NULL) +
+ # scale_x_continuous(limits=c(-2.5, 2.5), breaks=seq(-2, 2,1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+pisc_dens_post_plot
+
+
+
+###combine plots
+pisc_dens_comb_plot <-
+  ggdraw() + 
+  draw_plot(pisc_dens_box_all, x = 0, y = 0, width = 0.5, height = 1) +
+  draw_plot(pisc_dens_post_plot,  x = 0.5, y = 0, width = 0.5, height = 1) 
+pisc_dens_comb_plot
+
+```
+
+
+###look at size
+```{r}
+groupmean<-
+ pisc_only_2018 %>%
+  group_by(Treatment) %>%
+  summarize(mean_size = mean(Length))
+
+##histogram: 
+pisc_size_plot<-
+  pisc_only_2018  %>%
+ggplot(aes(x=Length, fill = Treatment)) + 
+  geom_histogram(aes(y= ..density..), position="identity", binwidth = 2.5) + 
+  geom_vline(data=groupmean, aes(xintercept=mean_size, color =Treatment, alpha = 0.9), linetype = "dashed") +
+    scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"), 0.6))+
+    scale_colour_manual(values = c("#005AB5", "#DC3220"))+
+   scale_y_continuous(expand = c(0, 0), limits = c(0, 0.1), breaks=seq(0,0.1,0.05))+ 
+   scale_x_continuous( breaks=seq(5,55,10))+ 
+  xlab("Length (cm)")+
+  ylab("Density")+
+   theme_bw() + 
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+
+pisc_size_plot
+
+
+```
+
+
+##Models: size distributions
+```{r}
+
+##just use regular/log models rather than exgaussian because not much data. 
+##exgaussian showed similar results - no effect of treatment on skewness/distribution shape, but does affect the median/mean size
+
+
+range(pisc_only_2018$Length)#13 48
+mean(pisc_only_2018$Length) #29.31343
+
+
+#normal distribution: 
+pisc_size_mod_normal<- 
+ brm(Length ~ treatment_b + (1|Atoll),family = gaussian(),
+        data = pisc_only_2018,
+        iter = 3000, warmup = 1000, chains = 4, cores = 4,
+        prior = c(prior(normal(29,10), class = "Intercept"), #weakly informative prior based on mean length
+              prior(normal(0,10), class = "b")), #weakly informative - allow any bird-rat effect
+      control = list(adapt_delta = 0.9999, max_treedepth = 20),
+           sample_prior="yes",
+      file = "pisc_size_mod_normal")
+print(pisc_size_mod_normal)
+plot(pisc_size_mod_normal, ask = FALSE)
+
+
+#intercept:
+posterior_samples(pisc_size_mod_normal) %>% 
+  select(b_Intercept, prior_Intercept) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope:
+posterior_samples(pisc_size_mod_normal) %>% 
+  select(b_treatment_bNo_rats, prior_b) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+
+
+#Compile posterior distributions:
+size_post <- posterior_samples(pisc_size_mod_normal)
+median_hdi(size_post$b_treatment_bNo_rats, .width = .95) #7.696486	1.912389	13.56865	
+
+
+#test hypothesis that birdy effect is > 0
+hypothesis(pisc_size_mod_normal, c("treatment_bNo_rats > 0"))#posterior prob = 0.99
+
+
+```
+
+
+
+##Posterior plots for size
+```{r}
+##just plot mean for paper: 
+size_post_plot<-
+pisc_size_mod_normal %>%
+  spread_draws(b_treatment_bNo_rats) %>%
+ # mutate(exp_b=exp(b_treatment_bNo_rats))%>%
+  ggplot(aes(y = 0, x = b_treatment_bNo_rats, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=c(.95, 0.75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in length")+
+  ylab("Posterior density") +
+  scale_y_continuous(breaks = NULL) +
+#  scale_x_continuous(limits=c(-2.5, 2.5), breaks=seq(-2, 2,1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"))
+size_post_plot
+
+
+
+##combine
+pisc_size_comb_plot <-
+     ggdraw() + 
+     draw_plot(pisc_size_plot, x = 0, y = 0, width = 0.5, height = 1) +
+     draw_plot(size_post_plot,  x = 0.5, y = 0, width = 0.5, height = 1) 
+
+
+```
+
+
+##combine plots for supplement
+```{r}
+pisc_size_plot
+pisc_dens_box_all
+
+
+
+####combine these into one:
+pisc_supp_plots_comb<-plot_grid(pisc_dens_comb_plot, pisc_size_comb_plot, ncol = 1, align = "hv")
+pisc_supp_plots_comb
+
+ggsave(filename = "pisc_supp_plots_comb_march25.pdf", 
+       plot = pisc_supp_plots_comb,
+       width = 15, 
+       height = 15,
+       units = "cm",
+       dpi = 300,
+       family = "sans",
+       useDingbats=FALSE)
+
+
+
+####raw data only
+pisc_supp_plots_raw_comb<-plot_grid(pisc_dens_box_all, pisc_size_plot, ncol = 2, align = "hv")
+pisc_supp_plots_raw_comb
+
+ggsave(filename = "pisc_supp_plots_raw_only_comb_march25.pdf", 
+       plot = pisc_supp_plots_raw_comb,
+       width = 15, 
+       height = 10,
+       units = "cm",
+       dpi = 300,
+       family = "sans",
+       useDingbats=FALSE)
+
+```
+
+
+######CORAL COVER AND STRUCTURAL COMPLEXITY
+```{r}
+
+##CORAL
+#raw data
+range(pisc_only_sum_2018$Coral_cover) #00 75
+mean(pisc_only_sum_2018$Coral_cover) #18.06955
+median(pisc_only_sum_2018$Coral_cover) #11.67
+
+
+##CORAL
+coral_trans_mod <- 
+  brm(data = pisc_only_sum_2018, family = gaussian, 
+      Coral_cover ~ treatment_b  + (1|Atoll),
+      prior = c(prior(normal(0,10), class = "b"), ##weakly informative - allows any sort of bird/rat effect
+                prior(normal(18,10), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "coral_trans_mod")
+print(coral_trans_mod) #looks good
+pp_check(coral_trans_mod) #looks good
+plot(coral_trans_mod, ask = FALSE)
+
+
+#STRUCTURE
+range(pisc_only_sum_2018$Structure) #1.0 3.5
+mean(pisc_only_sum_2018$Structure) #2.227273
+median(pisc_only_sum_2018$Structure) #2
+
+
+structure_trans_mod <- 
+  brm(data = pisc_only_sum_2018, family = gaussian, 
+      Structure ~ treatment_b  + (1|Atoll),
+      prior = c(prior(normal(0,1), class = "b"), ##weakly informative - allows any sort of bird/rat effect
+                prior(normal(2,1), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "structure_trans_mod")
+print(structure_trans_mod) #looks good
+pp_check(structure_trans_mod)#looks good
+plot(structure_trans_mod, ask = FALSE)
+
+
+###posterior plots
+coral_post_plot <-
+posterior_samples(coral_trans_mod) %>%
+  ggplot(aes(fill = stat(x < 0))) +
+    stat_halfeyeh(aes(y = 0, x = b_treatment_bNo_rats), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in coral cover")+ 
+  ylab("Posterior density") +
+# scale_x_continuous(limits=c(-4, 5), breaks=seq(-4, 5, 1))+
+  #scale_x_continuous(limits=c(-0.05, 0.25), breaks=seq(0, 0.25,.1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+coral_post_plot
+
+structure_post_plot <-
+posterior_samples(structure_trans_mod) %>%
+  ggplot(aes(fill = stat(x < 0))) +
+    stat_halfeyeh(aes(y = 0, x = b_treatment_bNo_rats), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in structural complexity")+ 
+  ylab("Posterior density") +
+# scale_x_continuous(limits=c(-4, 5), breaks=seq(-4, 5, 1))+
+  #scale_x_continuous(limits=c(-0.05, 0.25), breaks=seq(0, 0.25,.1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+structure_post_plot
+
+
+
+###check median hdi's:
+#Compile posterior distributions:
+struct_post <- posterior_samples(structure_trans_mod)
+median_hdi(struct_post$b_treatment_bNo_rats, .width = .95) #0.09475949	-0.3101747	0.4305455	
+
+coral_post <- posterior_samples(coral_trans_mod)
+median_hdi(coral_post$b_treatment_bNo_rats, .width = .95) #0.5489055	-5.222463	6.277163	
+
+```
+
+
+
+
+###combine plots - coral and structure for supplement
+```{r}
+
+reef_post_comb_use<-plot_grid(coral_post_plot, structure_post_plot, ncol = 2, align = "hv")
+reef_post_comb_use
+
+
+ggsave(filename = "reef_post_comb_use_25march.pdf", 
+       plot = reef_post_comb_use,
+       width = 21, 
+       height = 10,
+       units = "cm",
+       dpi = 300,
+       family = "sans",
+       useDingbats=FALSE)
+
+
+
+```
+
+

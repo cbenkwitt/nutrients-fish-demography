@@ -1,0 +1,15 @@
+rat_status,island,atoll,side_atoll,island_orientation,latitude,longitude,collections,surveys,seabird_no_breeding_pairs,seabird_bp_density,island_area,npp,wave_energy,sst,piscivore_bio,coral_cover,structural_complexity
+rat-free,Middle Brother,Great Chagos Bank,NW,N,-6.15204,71.51846,X,X,32275,4034.38,8,864.92,29.51,28.85,443.40,10.42,2.88
+rat-free,South Brother,Great Chagos Bank,NW,NW,-6.16904,71.5437,,X,22432,975.30,23,886.42,29.73,28.89,12.45,10.83,1.00
+rat-free,Grand Ile Coquillage,Peros Banhos,E,N,-5.37241,71.96729,X,X,40525,1447.32,28,765.96,0.48,29.15,37.30,4.17,1.63
+rat-free,Petite Ile Coquillage,Peros Banhos,E,N,-5.3403,71.97078,X,,22135,1054.05,21,765.96,0.48,29.15,,,
+rat-free,Ile Longue,Peros Banhos,N,E,-5.27221,71.86643,,X,49758,1951.29,25.5,724.83,22.86,29.11,57.30,0.83,2.25
+rat-free,Ile de la Passe,Salomon,NE,W,-5.30566,72.25172,X,X,498,19.15,26,700.58,0.31,29.15,49.48,56.38,3.13
+rat-infested,Eagle Island,Great Chagos Bank,NW,NE,-6.18665,71.33818,X,X,81,0.33,243.5,843.61,30.29,28.86,8.73,15.84,1.50
+rat-infested,Diamante PB,Peros Banhos,NW,NE,-5.25665,71.76511,X,,57,0.63,91,698.90,0.38,29.26,,,
+rat-infested,Ile Gabrielle,Peros Banhos,SW,N,-5.42424,71.75498,X,,15,0.94,16,783.83,0.24,29.15,,,
+rat-infested,Ile Anglaise PB,Peros Banhos,SW,N,-5.43892,71.75688,,X,40,3.33,12,783.83,0.24,29.15,63.58,13.75,2.13
+rat-infested,Ile Poule,Peros Banhos,SW,N,-5.41052,71.75508,,X,16,0.15,108,787.89,0.41,29.09,0.95,9.58,1.88
+rat-infested,Grande Ile Mapou,Peros Banhos,NW,NE,-5.2663,71.75596,,X,45,2.31,19.5,698.90,0.38,29.26,20.15,5.00,1.88
+rat-infested,Ile Anglaise Sal,Salomon,NW,NE,-5.32822,72.22462,X,X,46,0.61,75.5,753.31,0.23,29.20,44.78,43.18,3.25
+rat-infested,Ile Fouquet,Salomon,SE,NE,-5.3431,72.26185,,X,109,2.76,39.5,718.04,24.71,29.15,0.00,28.79,3.00

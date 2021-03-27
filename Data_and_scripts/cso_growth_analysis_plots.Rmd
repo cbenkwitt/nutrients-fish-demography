@@ -1,0 +1,988 @@
+---
+title: "R Notebook: C. sordidus growth analyses"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+#Step 0: Load packages
+```{r}
+library(tidyverse)
+library(brms)
+library(tidybayes)
+library(modelr) #for data_grid function
+library(bayesplot)
+library(gridExtra) #for plots
+library(RColorBrewer) #for plots
+library(cowplot) #for plots
+library(scales) #for plots
+```
+
+
+#Step 1: Load data
+```{r}
+
+load("cso_data.Rdata")
+
+##want to use lagoon, female, stage 3 only file:
+head(cso_dat_lfm)
+str(cso_dat_lfm)
+
+###need to run log-log model to make it fit better
+cso_dat_lfm$llength<-log(cso_dat_lfm$fork_length_cm)
+
+#create indicator variable
+cso_dat_lfm$tin<-ifelse(cso_dat_lfm$treatment=="ratty", 0, 1)
+
+
+##re-level to make ratty the reference level, rather than birdy:
+cso_dat_lfm$treatment_b<-relevel(cso_dat_lfm$treatment, "ratty")
+
+##checking ranges
+range(cso_dat_lfm$fork_length_cm)
+range(cso_dat_lfm[cso_dat_lfm$treatment=="ratty",]$fork_length_cm) #15.7  25.0
+range(cso_dat_lfm[cso_dat_lfm$treatment=="birdy",]$fork_length_cm) #15.2 to 26.8
+range(cso_dat_lfm[cso_dat_lfm$treatment=="ratty",]$age_final) #1 to 6
+range(cso_dat_lfm[cso_dat_lfm$treatment=="birdy",]$age_final) #1 to 8
+
+
+#check sample sizes:
+cso_dat_lfm%>%
+ group_by(island)%>%
+  tally(age_final)
+
+##need to drop levels:
+cso_dat_lfm<-
+  cso_dat_lfm%>%
+  droplevels()
+levels(cso_dat_lfm$island)
+
+
+```
+
+
+##response to reviewers: compare VBGF models where allow K, both K & Linf, neither to vary:
+```{r}
+#need to specify priors for nl models
+#based on priors in Graham et al. 2018 (who used same formula)
+vbgf_prior_k_only<- c(
+  prior(uniform(15.2, 53.6), nlpar = "Linf", lb = 15.2, ub = 53.6), #constraind between minimum size and twice maximum
+  prior(uniform(0,2), nlpar = "K", lb=0, ub = 2), #constrained because must be > 0, and k not > 2
+  prior(uniform(0, 15.2), nlpar = "L0", lb = 0, ub = 15.2), ###L0 constrained bewettn 0 and minimum size observed
+  prior(normal(0, 1), nlpar = "K1") ###weak, to allow either positive or negative (or 0) birdy effect
+)
+
+#run model - K only----------------
+vbgf_mod_k_only <- 
+  brm(
+    bf(
+      llength ~ log(Linf-(Linf-L0)*exp(-(K+K1*tin)*age_final)),
+      Linf~1, K~1, L0~1, K1~1,
+      nl=TRUE),
+    data = cso_dat_lfm, family = gaussian,
+    prior = vbgf_prior,
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+    control = list(adapt_delta = 0.9999, max_treedepth=15), 
+    sample_prior=TRUE,
+      file = "vbgf_mod_k_only"
+  )
+print(vbgf_mod_k_only) 
+plot(vbgf_mod_k_only, ask = FALSE)
+pp_check(vbgf_mod_k_only)
+
+
+#run model - K and Linf----------------
+vbgf_prior_both<- c(
+  prior(uniform(15.2, 53.6), nlpar = "Linf", lb = 15.2, ub = 53.6), #constraind between minimum size and twice maximum
+  prior(uniform(0,2), nlpar = "K", lb=0, ub = 2), #constrained because must be > 0, and k not > 2
+  prior(uniform(0, 15.2), nlpar = "L0", lb = 0, ub = 15.2), ###L0 constrained bewettn 0 and minimum size observed
+  prior(normal(0, 1), nlpar = "K1"), ###weak, to allow either positive or negative (or 0) birdy effect
+  prior(normal(0, 10), nlpar = "Linf1") ###weak, to allow either positive or negative (or 0) birdy effect
+)
+
+vbgf_mod_both <- 
+  brm(
+    bf(
+      llength ~ log((Linf+Linf1*tin)-((Linf+Linf1*tin)-L0)*exp(-(K+K1*tin)*age_final)),
+      Linf~1, K~1, L0~1, K1~1, Linf1~1,
+      nl=TRUE),
+    data = cso_dat_lfm, family = gaussian,
+    prior = vbgf_prior_both,
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+    control = list(adapt_delta = 0.9999, max_treedepth=15), 
+    sample_prior=TRUE,
+      file = "vbgf_mod_both"
+  )
+print(vbgf_mod_both) 
+plot(vbgf_mod_both, ask = FALSE)
+pp_check(vbgf_mod_both)
+##k trend is still positive
+
+
+##run model - neither vary----------------
+vbgf_prior_none<- c(
+  prior(uniform(15.2, 53.6), nlpar = "Linf", lb = 15.2, ub = 53.6), #constraind between minimum size and twice maximum
+  prior(uniform(0,2), nlpar = "K", lb=0, ub = 2), #constrained because must be > 0, and k not > 2
+  prior(uniform(0, 15.2), nlpar = "L0", lb = 0, ub = 15.2) ###L0 constrained bewettn 0 and minimum size observed
+)
+
+
+vbgf_mod_none <- 
+  brm(
+    bf(
+      llength ~ log(Linf-(Linf-L0)*exp(-(K)*age_final)),
+      Linf~1, K~1, L0~1,
+      nl=TRUE),
+    data = cso_dat_lfm, family = gaussian,
+    prior = vbgf_prior_none,
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+    control = list(adapt_delta = 0.9999, max_treedepth=15), 
+    sample_prior=TRUE,
+      file = "vbgf_mod_none"
+  )
+print(vbgf_mod_none) 
+plot(vbgf_mod_none, ask = FALSE)
+pp_check(vbgf_mod_none)
+
+
+###model comparisons----------
+loo_both<-loo(vbgf_mod_both, moment_match=TRUE)
+loo_k<-loo(vbgf_mod_k_only, moment_match=TRUE)
+loo_none<-loo(vbgf_mod_none, moment_match=TRUE)
+
+loocomp<-loo_compare(loo_both, loo_k, loo_none)
+
+print(loocomp, simplify = F)
+#model with only k is the best, model with none varying is definitely the worst.
+
+
+#look at model weights: 
+model_weights(vbgf_mod_both, vbgf_mod_k_only, vbgf_mod_none, 
+              weights = "waic") %>% 
+  round(digits = 2)
+###matches results above: most weight for k only model (0.66) versus both model (0.31) versus none model (0.03)
+
+##don't just blindly go on model weights - see what parameter estimates look like as well
+
+###compare estimates:                 Estimate  Est.Error l-95% CI u-95% CI                 Estimate  Est.Error l-95% CI u-95% CI
+print(vbgf_mod_k_only)#K1_Intercept       0.10      0.05     0.03     0.22 #K_Intercept        0.28      0.07     0.17     0.44
+print(vbgf_mod_both)  #K1_Intercept       0.09      0.12    -0.16     0.32 #K_Intercept        0.27      0.12     0.10     0.55 
+
+hypothesis(vbgf_mod_k_only, "K1_Intercept > 0") #posterior probability = 1
+hypothesis(vbgf_mod_both, c("K1_Intercept > 0", #posterior probability = 0.78 - still quite strong evidence for an effect
+                            "Linf1_Intercept < 0")) #posterior probability = 0.49 - absolutely no evidence that Linf differs by bird versus rat status
+
+##Use model with only k varying because:
+#(1) matches Graham et al. 2018 so facilitates comparisons
+#(2) allows focus on variable of interest (growth rate)
+#(3) most evidence for this model (from WAIC)
+#(4) no evidence that Linf differs by bird-rat status (from hypothesis testing with both model)
+
+
+
+#Compile posterior distributions:
+vbgf_post <- posterior_samples(vbgf_mod_k_only)
+median_hdi(vbgf_post$b_K1_Intercept, .width = .95) ## 0.09591383	0.01887863	0.1972184	
+median_hdi(vbgf_post$b_K_Intercept, .width = .95) ##0.2747117	0.1553863	0.4144186	
+median_hdi(vbgf_post$b_Linf_Intercept, .width = .95) ##24.62626	22.87138	26.89462	
+
+
+vbgf_post_linf <- posterior_samples(vbgf_mod_both)
+median_hdi(vbgf_post_linf$b_K1_Intercept, .width = .95) ## 0.08986419	-0.1668529	0.3058683	
+median_hdi(vbgf_post_linf$b_Linf1_Intercept, .width = .95) ## 0.05632566	-7.510531	4.834921
+median_hdi(vbgf_post_linf$b_Linf_Intercept, .width = .95) ## 24.86945	21.38321	32.38188	0.95	median	hdi
+                                                          ##24.86945	32.65962	32.65962	0.95	median	hdi
+median_hdi(vbgf_post_linf$b_K_Intercept, .width = .95) ## 0.258129	0.072564	0.4999814	
+print(vbgf_mod_both)
+
+
+```
+
+
+#Final VBGF model (also note earlier versions built up models slowly, compared different priors, etc. - all came to same conclusions)
+```{r}
+#double-check diagnostics, compile posterior distributions, etc. for k-only model from above:
+
+print(vbgf_mod_k_only) 
+plot(vbgf_mod_k_only, ask = FALSE)
+pp_check(vbgf_mod_k_only)
+pairs(vbgf_mod_k_only)
+prior_summary(vbgf_mod_k_only)
+##all looks good
+
+#compare posterior vs. prior distributions
+#Linf:
+posterior_samples(vbgf_mod_k_only) %>% 
+  select(b_Linf_Intercept, prior_b_Linf) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#K:
+posterior_samples(vbgf_mod_k_only) %>% 
+  select(b_K_Intercept, prior_b_K) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope (rat):
+posterior_samples(vbgf_mod_k_only) %>% 
+  select(b_L0_Intercept, prior_b_L0) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope (rat):
+posterior_samples(vbgf_mod_k_only) %>% 
+  select(b_K1_Intercept, prior_b_K1) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+
+#Compile posterior distributions:
+vbgf_post <- posterior_samples(vbgf_mod_k_only)
+median_hdi(vbgf_post$b_K1_Intercept, .width = .95) #median = 0.09591383, min = 0.01887863, max = 0.1972184
+median_hdi(vbgf_post$b_K_Intercept, .width = .95) #ratty: 0.2747117
+median_hdi(vbgf_post$b_K_Intercept+vbgf_post$b_K1_Intercept, .width = .95) #birdy: median = 0.3752644
+
+
+#test hypothesis that birdy effect is > 0
+hypothesis(vbgf_mod_k_only, "K1_Intercept  > 0") ##evidence ratio = 1332.33, posterior prob = 1
+
+ 
+##calculate percent difference:
+ vbgf_mod_k_only %>%
+  spread_draws(b_K1_Intercept, b_K_Intercept) %>%
+   median_qi(k_rat = b_K_Intercept, 
+            k_bird_diff = b_K1_Intercept)%>%
+   mutate(percent_diff = (k_bird_diff)/((k_rat+k_rat+k_bird_diff)/2)*100, #29.72518
+          percent_change_rat_to_bird = (k_bird_diff)/k_rat*100) #34.91435
+
+
+```
+
+
+###posterior plots and plots with raw data and regression lines for VBGF model
+```{r}
+
+##posterior:
+vbgf_k_post_plot <-
+vbgf_mod_k_only %>%
+  spread_draws(b_K1_Intercept) %>%
+  ggplot(aes(y = 0, x = b_K1_Intercept, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in growth paramater k")+ 
+  ylab("Posterior density") +
+  scale_y_continuous(breaks = NULL) +
+#  scale_x_continuous(limits=c(-0.1, 0.4), breaks=seq(-0.1, 0.3, .1), labels = scales::number_format(accuracy = 0.1))+
+  #scale_x_continuous(limits=c(-0.05, 0.25), breaks=seq(0, 0.25,.1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+vbgf_k_post_plot
+
+
+##raw data with curves
+vbgf_k_plot<-
+cso_dat_lfm %>%
+  group_by(treatment) %>%
+  add_fitted_draws(vbgf_mod_k_only) %>% #re_formula = NA to deal with random effects
+  ggplot(aes(x = age_final, y = fork_length_cm, color = treatment, fill = treatment,  alpha = 0.6)) +
+  geom_point(data = cso_dat_lfm, size = 3, aes(shape = ordered(treatment)))+
+  stat_lineribbon(aes(y = exp(.value)), .width=0) + #changed .width from 0 to have some error bars
+   scale_fill_manual(values = c("#005AB5", "#DC3220")) + 
+  scale_color_manual(values = c("#005AB5", "#DC3220")) +   
+  scale_shape_manual(values = c(21,23)) + 
+  theme_bw() + 
+  xlab("Age (years)")+
+  ylab("Length (cm)") +
+  #  ggtitle("Only k varies")+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+vbgf_k_plot
+
+
+
+##comparing raw data with curves from both models on same plot
+dat_k_mod<-
+  cso_dat_lfm %>%
+  group_by(treatment) %>%
+  add_fitted_draws(vbgf_mod_k_only)
+
+dat_both_mod<-
+  cso_dat_lfm %>%
+  group_by(treatment) %>%
+  add_fitted_draws(vbgf_mod_both)
+  
+vbgf_2_plot<-
+  ggplot(data = dat_k_mod, aes(x = age_final, y = fork_length_cm, color = treatment, fill = treatment,  alpha = 0.6)) +
+  geom_point(data = cso_dat_lfm, size = 3, aes(shape = ordered(treatment)))+
+  stat_lineribbon(aes(y = exp(.value)), .width=.95) + #changed .width from 0 to have some error bars
+    stat_lineribbon(data = dat_both_mod, aes(y = exp(.value)), .width=.95, lty=2) + #changed .width from 0 to have some error bars
+   scale_fill_manual(values = c("#005AB5", "#DC3220")) + 
+  scale_color_manual(values = c("#005AB5", "#DC3220")) +   
+  scale_shape_manual(values = c(21,23)) + 
+  theme_bw() + 
+  xlab("Age (years)")+
+  ylab("Length (cm)") +
+  #  ggtitle("Only k varies")+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+vbgf_2_plot
+##yup, nearly identical.
+
+```
+
+
+##Combine plots for paper
+```{r}
+vbgf_comb_plot <-
+  ggdraw() + 
+  draw_plot(vbgf_k_plot, x = 0, y = 0, width = 0.5, height = 1) +
+  draw_plot(vbgf_k_post_plot,  x = 0.5, y = 0, width = 0.5, height = 1) 
+vbgf_comb_plot
+
+```
+
+
+###respone to reviewers: run re-parametized VBGF model in bayesian framework to estimate length at specific ages (model built up slowly in previous files)
+```{r}
+#model (extracted formula from fishmethods package):
+# L ~ lphi + (lpsi - lphi) * (1 - ((lpsi - lchi)/(lchi - lphi))^(2 *(x$age - agephi)/(agepsi - agephi)))/(1 - ((lpsi - lchi)/(lchi - lphi))^2)
+###we're estimating lphi, lchi, and lpsi. agepsi and agephi will be set (phi = 2, psi = 6 - to cover age range with most data).
+
+
+##split into rats/no rats for each age (lphi, lpsi, lchi)
+repram_prior_2<- c(
+  prior(uniform(15, 27), nlpar = "lphi", lb = 15, ub = 27), #constrained between approx minimum and maximum size
+  prior(uniform(15, 27), nlpar = "lpsi", lb = 15, ub = 27), #constrained between approx minimum and maximum size
+  prior(uniform(15, 27), nlpar = "lchi", lb = 15, ub = 27), #constrained between approx minimum and maximum size
+  prior(normal(0,10), nlpar = "lphi1"), #allow lphi to vary by rat status in either direction
+  prior(normal(0,10), nlpar = "lpsi1"), #allow lphi to vary by rat status in either direction
+  prior(normal(0,10), nlpar = "lchi1") #allow lphi to vary by rat status in either direction
+)
+
+
+reparam_mod_treat2 <- 
+  brm(
+    bf(
+      llength ~ log((lphi+lphi1*tin) + ((lpsi+lpsi1*tin) - (lphi+lphi1*tin)) * 
+        (1 - (((lpsi+lpsi1*tin)-(lchi+lchi1*tin))/((lchi+lchi1*tin)-(lphi+lphi1*tin)))^(2 *(age_final - 2)/(6 - 2)))
+      /(1 - (((lpsi+lpsi1*tin)-(lchi+lchi1*tin))/((lchi+lchi1*tin)-(lphi+lphi1*tin)))^2)),
+     lphi~1, lpsi~1, lchi~1, lphi1~1, lpsi1~1, lchi1~1, 
+      nl=TRUE),
+    data = cso_dat_lfm, family = gaussian,
+    prior = repram_prior_2,
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+    control = list(adapt_delta = 0.9999, max_treedepth=15), 
+    sample_prior=TRUE,
+      file = "reparam_mod_treat2"
+  )
+
+print(reparam_mod_treat2) 
+plot(reparam_mod_treat2, ask = FALSE)
+
+#do manual pp_check:
+y <- cso_dat_lfm$llength
+yrep <- posterior_predict(reparam_mod_treat2) %>%
+  na.exclude()
+ppc_dens_overlay(y, yrep[1:10,])
+###all looks good
+
+
+hypothesis(reparam_mod_treat2, c("lphi1_Intercept  > 0", ##0.90
+                                  "lpsi1_Intercept  > 0", ##0.6
+                                  "lchi1_Intercept  > 0")) #1.00
+#strong evidence for differences in lphi and lchi
+
+
+#Compile posterior distributions:
+reparam_post <- posterior_samples(reparam_mod_treat2)
+median_hdi(reparam_post$b_lphi1_Intercept, .width = .95) ## 0.5843224	-0.3702454	1.494105		
+median_hdi(reparam_post$b_lpsi1_Intercept, .width = .95) ## 0.2290143	-1.489648	2.140322
+median_hdi(reparam_post$b_lchi1_Intercept, .width = .95) ## 2.240697	0.9637946	3.472135	
+
+median_hdi(reparam_post$b_lphi_Intercept, .width = .95) ## 19.40771	18.79999	20.02697			
+median_hdi(reparam_post$b_lpsi_Intercept, .width = .95) ## 23.14062	21.92997	24.47871	
+median_hdi(reparam_post$b_lchi_Intercept, .width = .95) ## 21.30782	20.58563	21.9651	
+
+
+
+est_age_length<-
+  reparam_mod_treat2 %>%
+  spread_draws(b_lphi_Intercept, b_lpsi_Intercept, b_lchi_Intercept, b_lphi1_Intercept, b_lpsi1_Intercept, b_lchi1_Intercept) %>%
+   median_qi(lphi_rat = b_lphi_Intercept,
+            lphi_bird = b_lphi_Intercept + b_lphi1_Intercept,
+             lchi_rat = b_lchi_Intercept, 
+            lchi_bird = b_lchi_Intercept + b_lchi1_Intercept,
+             lpsi_rat = b_lpsi_Intercept, 	
+             lpsi_bird = b_lpsi_Intercept + b_lpsi1_Intercept) 
+est_age_length
+
+
+est_age_length_75<-
+  reparam_mod_treat2 %>%
+  spread_draws(b_lphi_Intercept, b_lpsi_Intercept, b_lchi_Intercept, b_lphi1_Intercept, b_lpsi1_Intercept, b_lchi1_Intercept) %>%
+   median_qi(lphi_rat = b_lphi_Intercept,
+            lphi_bird = b_lphi_Intercept + b_lphi1_Intercept,
+             lchi_rat = b_lchi_Intercept,
+            lchi_bird = b_lchi_Intercept + b_lchi1_Intercept,
+             lpsi_rat = b_lpsi_Intercept,
+             lpsi_bird = b_lpsi_Intercept + b_lpsi1_Intercept, .width=.75)
+est_age_length_75
+
+
+##use above lengths at age to calculate grazing rates based on Lange et al. 2020 rates:
+#	             a	       b
+#Grazing: 	  0.0433	2.209
+#Bioerosion:	0.0131	2.211
+#rate = a*TL^b 	
+
+
+```
+
+
+###Plots for reparameterized vbgf - supplement
+```{r}
+
+##plot as one:
+reparam_post_plot_all <-
+reparam_mod_treat2 %>%
+  spread_draws(b_lchi1_Intercept, b_lpsi1_Intercept, b_lphi1_Intercept) %>%
+  ggplot(aes(fill = stat(x < 0))) +
+  stat_halfeyeh(aes(y = 0, x = b_lpsi1_Intercept, ), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+    stat_halfeyeh(aes(y = 1, x = b_lchi1_Intercept, ), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+    stat_halfeyeh(aes(y = 2, x = b_lphi1_Intercept, ), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in length-at-age (cm)")+ 
+  ylab("") +
+  scale_y_continuous(breaks=c(0,1,2), labels= c("0" = "age 6", "1" = "age 4", "2" = "age 2")) +
+  scale_x_continuous(limits=c(-4, 5), breaks=seq(-4, 5, 1))+
+  #scale_x_continuous(limits=c(-0.05, 0.25), breaks=seq(0, 0.25,.1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+reparam_post_plot_all
+
+
+#ggsave(filename = "reparam_post_plot_all_length_age_diff_16march.pdf", 
+#       plot = reparam_post_plot_all,
+#       width = 15, 
+#       height = 10,
+#       units = "cm",
+#       dpi = 300,
+#       family = "sans",
+#       useDingbats=FALSE)
+
+
+
+```
+
+
+###response to reviewers - run models for difference in max age and max length between rat-free and rat-infested islands: 
+```{r}
+#calculated #mean of upper quartile calculations to get max age and max length by island - saved in:
+load("cso_max_length_age_data.Rdata")
+
+str(max_length_age_dat)
+
+#run model - length
+range(max_length_age_dat$mean_length) #21.06667 26.30000
+mean(max_length_age_dat$mean_length) #23.49063
+
+max_length_mod <- 
+  brm(data = max_length_age_dat, family = gaussian,
+      mean_length  ~ treatment_b + (1|atoll),
+      prior = c(prior(normal(23,5), class = Intercept), ###weakly informative prior based on mean and range
+                prior(normal(0, 10), class = "b", coef = "treatment_bbirdy")), #weakly informative prior
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "max_length_mod")
+
+print(max_length_mod) #all good
+plot(max_length_mod, ask = FALSE)
+pp_check(max_length_mod, nsamples=100) # a bit messy, but not bad
+
+hypothesis(max_length_mod, "treatment_bbirdy>0") # 98% posterior prob
+
+
+#run model - age
+range(max_length_age_dat$mean_age)
+mean(max_length_age_dat$mean_age)
+
+max_age_mod <- 
+  brm(data = max_length_age_dat, family = gaussian,
+      mean_age  ~ treatment_b + (1|atoll),
+      prior = c(prior(normal(6,2), class = Intercept), ###weakly informative prior based on mean and range
+                prior(normal(0, 10), class = "b", coef = "treatment_bbirdy")), #weakly informative prior
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "max_age_mod")
+
+print(max_age_mod)
+plot(max_age_mod, ask = FALSE)
+pp_check(max_age_mod, nsamples=100) #not great, but not terrible. 
+
+hypothesis(max_age_mod, "treatment_bbirdy>0") #0.95
+
+
+
+#Compile posterior distributions:
+age_post <- posterior_samples(max_age_mod)
+median_hdi(age_post$b_treatment_bbirdy, .width = .95) ## 1.358834	-0.3977543	3.068403
+
+
+length_post <- posterior_samples(max_length_mod)
+median_hdi(length_post$b_treatment_bbirdy, .width = .95) ## 1.933577	-0.0008097673	3.736939
+
+
+est_max_age<-
+  max_age_mod %>%
+  spread_draws(b_treatment_bbirdy, b_Intercept) %>%
+   median_qi(max_age_rat = b_Intercept, #5.298061	
+            max_age_bird = b_treatment_bbirdy + b_Intercept) #6.644844
+est_max_age
+
+
+est_max_length<-
+  max_length_mod %>%
+  spread_draws(b_treatment_bbirdy, b_Intercept) %>%
+   median_qi(max_length_rat = b_Intercept, #22.09622
+            max_length_bird = b_treatment_bbirdy + b_Intercept) #24.01752
+est_max_length
+
+
+##percent difference
+max_age_mod%>%
+  spread_draws(b_Intercept, b_treatment_bbirdy) %>%
+   median_qi(rat = b_Intercept, 
+            bird_diff = b_treatment_bbirdy)%>%
+   mutate(percent_diff = (bird_diff)/((rat+rat+bird_diff)/2)*100, #22.73256
+          percent_change_rat_to_bird = (bird_diff)/rat*100) #25.64775
+
+
+max_length_mod%>%
+  spread_draws(b_Intercept, b_treatment_bbirdy) %>%
+   median_qi(rat = b_Intercept, 
+            bird_diff = b_treatment_bbirdy)%>%
+   mutate(percent_diff = (bird_diff)/((rat+rat+bird_diff)/2)*100, #8.38389
+          percent_change_rat_to_bird = (bird_diff)/rat*100) #8.750715
+
+```
+
+
+##posterior plots from max age/length models:
+```{r}
+
+post_plot_maxage <-
+max_age_mod %>%
+  spread_draws(b_treatment_bbirdy) %>%
+  ggplot(aes(y = 0, x = b_treatment_bbirdy, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) + #.width=c(.95, 0.75)
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in maximum age")+ 
+    ylab("Posterior density") +
+    scale_x_continuous(limits = c(-3.8,8.6), breaks=seq(-2, 6, 2))+
+#  ylab("") +
+  #ggtitle("Difference in length at age 4")+
+  #scale_x_continuous(limits=c(-4, 5), breaks=seq(-4, 5, 1))+
+  #scale_x_continuous(limits=c(-0.05, 0.25), breaks=seq(0, 0.25,.1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+post_plot_maxage
+
+
+
+post_plot_maxlength <-
+max_length_mod %>%
+  spread_draws(b_treatment_bbirdy) %>%
+  ggplot(aes(y = 0, x = b_treatment_bbirdy, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) + # .width=c(.95, 0.75)
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in maximum length")+ 
+  ylab("Posterior density") +
+  #ggtitle("Difference in length at age 4")+
+    scale_x_continuous(limits = c(-3.8,8.6), breaks=seq(-2, 6, 2))+
+  #scale_x_continuous(limits=c(-0.05, 0.25), breaks=seq(0, 0.25,.1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16),
+         axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+post_plot_maxlength
+
+```
+
+###box plots for max age/length
+```{r}
+
+max_age_box<-
+max_length_age_dat %>% 
+ mutate(treatment = factor(treatment, levels=c("ratty", "birdy")))  %>% #re-arrange to match posterior plots
+  ggplot(aes(x=treatment, y=mean_age, fill=treatment, shape = treatment, alpha = 0.6)) + 
+  geom_boxplot(outlier.size=0, outlier.stroke=0) +
+  geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.7)) + 
+  scale_fill_manual(values = c("#DC3220", "#005AB5"))+
+  scale_shape_manual(values = c(23,21)) + 
+  scale_x_discrete(labels=c("rat-infested", "rat-free")) +
+ # scale_y_continuous(labels=scales::number_format(accuracy=0.1))+
+  theme_bw() + 
+  xlab(" ")+
+  ylab("Maximum age (years)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+max_age_box
+
+
+max_length_box<-
+max_length_age_dat %>% 
+ mutate(treatment = factor(treatment, levels=c("ratty", "birdy")))  %>% #re-arrange to match posterior plots
+  ggplot(aes(x=treatment, y=mean_length, fill=treatment, shape = treatment, alpha = 0.6)) + 
+  geom_boxplot(outlier.size=0, outlier.stroke=0) +
+  geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.7)) + 
+  scale_fill_manual(values = c("#DC3220", "#005AB5"))+
+  scale_shape_manual(values = c(23,21)) + 
+  scale_x_discrete(labels=c("rat-infested", "rat-free")) +
+ # scale_y_continuous(labels=scales::number_format(accuracy=0.1))+
+  theme_bw() + 
+  xlab(" ")+
+  ylab("Maximum length (cm)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+max_length_box
+
+
+```
+
+###combine max age/length plots and save:
+```{r}
+####NEW:
+max_age_plot <-
+  ggdraw() + 
+  draw_plot(max_age_box, x = 0, y = 0, width = 0.5, height = 1) +
+  draw_plot(post_plot_maxage,  x = 0.5, y = 0, width = 0.5, height = 1) 
+max_age_plot
+
+max_length_plot <-
+  ggdraw() + 
+  draw_plot(max_length_box, x = 0, y = 0, width = 0.5, height = 1) +
+  draw_plot(post_plot_maxlength,  x = 0.5, y = 0, width = 0.5, height = 1) 
+max_length_plot
+
+```
+
+
+
+##Combine growth plots with GSI plots from other file: 
+```{r}
+
+###new - to make it aligned:
+vbgf_k_plot
+vbgf_k_post_plot
+max_length_box
+post_plot_maxlength
+max_age_box
+post_plot_maxage
+gsi_boxplot
+gsi_post_plot
+
+
+aligned_raw_plots_1<-plot_grid(vbgf_k_plot, max_age_box, max_length_box, gsi_boxplot, ncol = 1, align = "hv")
+aligned_raw_plots_1
+
+aligned_post_1<-plot_grid(vbgf_k_post_plot, post_plot_maxage, post_plot_maxlength, gsi_post_plot, ncol = 1, align = "hv")
+aligned_post_1
+
+
+comb_plot_1 <-
+  ggdraw() + 
+  draw_plot(aligned_raw_plots_1, x = 0, y = 0, width = 0.5, height = 1) + # draw_plot(aligned_raw_plots, x = 0, y = 0, width = 0.55, height = 1)
+  draw_plot(aligned_post_1,  x = 0.5, y = 0, width = 0.5, height = 1) #  draw_plot(post_plots,  x = 0.55, y = 0, width = 0.45, height = 1) 
+comb_plot_1
+
+
+ggsave(filename = "fig1_comb_March16.pdf", 
+       plot = comb_plot_1,
+       width = 20, 
+       height = 25,
+       units = "cm",
+       dpi = 300,
+       family = "sans",
+       useDingbats=FALSE)
+
+```
+
+
+
+
+
+###run overall vbgf and allow to vary by individual to extract data - corr between growth and gsi
+```{r}
+#see Zhang et al. 2009 and Scherrer et al. 2021
+
+##run model - neither----------------
+vbgf_prior_none<- c(
+  prior(uniform(15.2, 53.6), nlpar = "Linf", lb = 15.2, ub = 53.6), #constraind between minimum size and twice maximum
+  prior(uniform(0,2), nlpar = "K", lb=0, ub = 2), #constrained because must be > 0, and k not > 2
+  prior(uniform(0, 15.2), nlpar = "L0", lb = 0, ub = 15.2) ###L0 constrained bewettn 0 and minimum size observed
+)
+
+
+vbgf_mod_none_ind <- 
+  brm(
+    bf(
+      llength ~ log(Linf-(Linf-L0)*exp(-(K)*age_final)),
+      Linf~1, K~1 + (1|sample_ID) , L0~1,
+      nl=TRUE),
+    data = cso_dat_lfm, family = gaussian,
+    prior = vbgf_prior_none,
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+    control = list(adapt_delta = 0.9999, max_treedepth=15), 
+    sample_prior=TRUE,
+      file = "vbgf_mod_none_ind"
+  )
+print(vbgf_mod_none_ind) 
+
+
+plot(vbgf_mod_none_ind, ask = FALSE)
+pp_check(vbgf_mod_none_ind)
+###alll look sokay
+
+###ok extract individual estimates: 
+ind_K<-
+  vbgf_mod_none_ind %>%
+  spread_draws(b_K_Intercept, r_sample_ID__K[sample_ID,]) %>%
+   median_qi(k_median = b_K_Intercept + r_sample_ID__K,
+             k_diff = r_sample_ID__K)
+ind_K
+
+###nice, okay now regress these against predictor variables: 
+cso_ind_K_dat<-inner_join(ind_K, cso_dat_lfm, by=c("sample_ID")) 
+cso_ind_K_dat
+
+ind_K_dat$sample_ID <- as_factor(ind_K_dat$sample_ID)
+
+
+##run model with just treatment to start: 
+ind_k_atoll <- 
+  brm(data = cso_ind_K_dat, family = gaussian,
+      k_median  ~ treatment_b  + (1|atoll),
+       prior = c(prior(normal(0.37,10), class = Intercept), #weakly informative intercept prior
+                prior(normal(0, 10), class = "b", coef = "treatment_bbirdy")), #weakly informative rat prior
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "ind_k_atoll")
+
+print(ind_k_atoll) #16 divergent trans
+plot(ind_k_atoll, ask=FALSE)
+pp_check(ind_k_atoll)
+
+
+hypothesis(ind_k_atoll, "treatment_bbirdy>0") ##100% posterior prob
+##still shows birdy effect
+
+
+
+####write data to file:
+cso_ind_K_dat
+####save as Rdata:
+#save(cso_ind_K_dat, file = "cso_ind_K_dat.Rdata")
+load("cso_ind_K_dat.Rdata")
+
+```
+
+
+###look for corr between k_diff, GSI at individual level:
+```{r}
+library(correlation) #https://rdrr.io/cran/correlation/man/cor_test.html
+#install.packages('BayesFactor')
+## when using cor_test() if you set multilevel=TRUE in it, the resulting correlations are partial one.
+
+
+##create reduced data frame with only variables we're interested in:
+cso_ind_K_dat_red<-
+  cso_ind_K_dat%>% 
+  select(c("k_median", "GSI", "atoll"))
+
+cor_test(cso_ind_K_dat_red, "k_median", "GSI", multilevel = TRUE) #, bayesian = TRUE, partial_bayesian = TRUE
+#Parameter1 | Parameter2 |     r |         95% CI | t(92) |       p
+#------------------------------------------------------------------
+#k_median   |        GSI | -0.28 | [-0.46, -0.08] | -2.80 | 0.006**
+
+cor_test(cso_ind_K_dat_red, "k_median", "GSI", multilevel = TRUE, bayesian = TRUE) #, partial_bayesian = TRUE
+#Parameter1 | Parameter2 |   rho |         95% CI |       pd | % in ROPE |    BF |         Prior
+#-----------------------------------------------------------------------------------------------
+#k_median   |        GSI | -0.26 | [-0.41, -0.11] | 99.60%** |     4.90% | 8.07* | Beta (3 +- 3)
+
+
+
+##remove k outlier and make sure pattern holds:
+cso_ind_K_dat_red2<-
+  cso_ind_K_dat%>% 
+  select(c("k_median", "GSI", "atoll")) %>% 
+  filter(k_median>=0.2)
+
+cor_test(cso_ind_K_dat_red2, "k_median", "GSI", multilevel = TRUE) #trend holds
+#Parameter1 | Parameter2 |     r |         95% CI | t(91) |      p
+#-----------------------------------------------------------------
+#k_median   |        GSI | -0.22 | [-0.41, -0.02] | -2.17 | 0.033*
+
+cor_test(cso_ind_K_dat_red2, "k_median", "GSI", multilevel = TRUE, bayesian = TRUE) # still quite strong
+#Parameter1 | Parameter2 |   rho |         95% CI |      pd | % in ROPE |   BF |         Prior
+#---------------------------------------------------------------------------------------------
+#k_median   |        GSI | -0.21 | [-0.37, -0.06] | 97.70%* |    12.47% | 2.06 | Beta (3 +- 3)
+
+```
+
+
+
+
+##old: VBGF model with k varying by atoll
+```{r}
+#need to specify priors for nl models
+#based on priors in Graham et al. 2018 (who used same formula)
+vbgf_prior<- c(
+  prior(uniform(15.2, 53.6), nlpar = "Linf", lb = 15.2, ub = 53.6), #constraind between minimum size and twice maximum
+  prior(uniform(0,2), nlpar = "K", lb=0, ub = 2), #constrained because must be > 0, and k not > 2
+  prior(uniform(0, 15.2), nlpar = "L0", lb = 0, ub = 15.2), ###L0 constrained bewettn 0 and minimum size observed
+  prior(normal(0, 1), nlpar = "K1") ###weak, to allow either positive or negative (or 0) birdy effect
+)
+
+#run model
+vbgf_mod <- 
+  brm(
+    bf(
+      llength ~ log(Linf-(Linf-L0)*exp(-(K+K1*tin)*age_final)),
+      Linf~1, K~1+(1|atoll), L0~1, K1~1,
+      nl=TRUE),
+    data = cso_dat_lfm, family = gaussian,
+    prior = vbgf_prior,
+      iter = 3000, warmup = 1000, chains = 4, cores = 4,
+    control = list(adapt_delta = 0.9999, max_treedepth=15), 
+    sample_prior=TRUE,
+      file = "vbgf_mod"
+  )
+print(vbgf_mod) 
+plot(vbgf_mod, ask = FALSE)
+pp_check(vbgf_mod)
+pairs(vbgf_mod)
+#14 divergent transitions, but ess, and other diagnostics look good
+prior_summary(vbgf_mod)
+
+#compare posterior vs. prior distributions
+#Linf:
+posterior_samples(vbgf_mod) %>% 
+  select(b_Linf_Intercept, prior_b_Linf) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#K:
+posterior_samples(vbgf_mod) %>% 
+  select(b_K_Intercept, prior_b_K) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope (rat):
+posterior_samples(vbgf_mod) %>% 
+  select(b_L0_Intercept, prior_b_L0) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope (rat):
+posterior_samples(vbgf_mod) %>% 
+  select(b_K1_Intercept, prior_b_K1) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+
+#Compile posterior distributions:
+vbgf_post <- posterior_samples(vbgf_mod)
+median_hdi(vbgf_post$b_K1_Intercept, .width = .95) #median = 0.08, min = 0.021, max = 0.14
+
+
+#test hypothesis that birdy effect is > 0
+hypothesis(vbgf_mod, "K1_Intercept  > 0") ##evidence ratio = 469.59, posterior prob = 1
+
+
+est_k<-
+  vbgf_mod %>%
+  spread_draws(b_K1_Intercept, b_K_Intercept) %>%
+   median_qi(k_rat = b_K_Intercept, #0.2769853	0.05928513	0.9180025
+            k_bird = b_K_Intercept + b_K1_Intercept) #0.3565911	0.1341369	0.9994793
+est_k
+
+est_k2<-
+  vbgf_mod_k_only %>%
+  spread_draws(b_K1_Intercept, b_K_Intercept) %>%
+   median_qi(k_rat = b_K_Intercept, #0.2747117	0.1709674	0.4387155	
+            k_bird = b_K_Intercept + b_K1_Intercept) #0.3752644	0.2231286	0.6074888	
+est_k2
+
+##very similar results as model without atoll, so use simpler model (no atoll) to match Graham et al. 2018. 
+
+```
+

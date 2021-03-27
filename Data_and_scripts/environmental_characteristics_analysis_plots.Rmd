@@ -1,0 +1,455 @@
+---
+title: "R Notebook - env chars"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+#Load packages
+```{r}
+library(tidyverse)
+library(brms)
+library(tidybayes)
+library(modelr) #for data_grid function
+library(bayesplot)
+library(gridExtra) #for plots
+library(RColorBrewer) #for plots
+library(cowplot) #for plots
+library(scales) #for plots
+```
+
+
+##load data
+```{r}
+env_dat<-read.csv("seabird_island_dat_final.csv")
+
+str(env_dat)
+
+
+##re-level rat_status:
+env_dat<-
+env_dat%>%
+  mutate(treatment_b=relevel(rat_status, "rat-infested"))
+
+#log responses:
+env_dat<-
+env_dat%>%
+  mutate(log_wave=log(wave_energy),
+         log_npp=log(npp),
+         log_sst=log(sst),
+         log_island_area=log(island_area))
+
+
+##collection reefs only:
+collect_env_dat<-
+env_dat %>% 
+  filter(collections=="X")
+
+#survey reefs only:
+surv_env_dat<-
+env_dat %>% 
+  filter(surveys=="X")
+
+
+
+```
+
+
+##run models - npp
+```{r}
+
+##all islands
+#raw data
+range(env_dat$npp) #698.90 886.42
+mean(env_dat$npp) # 769.7843
+median(env_dat$npp) #765.96
+
+
+npp_mod <- 
+  brm(data = env_dat, family = gaussian, 
+      npp ~ treatment_b  + (1|atoll),
+      prior = c(prior(normal(0,100), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(760,100), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "npp_mod")
+print(npp_mod) #absolutely no treatment effect
+pp_check(npp_mod) #looks okay....
+plot(npp_mod, ask = FALSE)
+
+
+
+##collection islands only
+npp_mod_collect <- 
+  brm(data = collect_env_dat, family = gaussian, 
+      npp ~ treatment_b  + (1|atoll),
+      prior = c(prior(normal(0,100), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(760,100), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "npp_mod_collect")
+print(npp_mod_collect) #absolutely no treatment effect
+pp_check(npp_mod_collect) #looks okay....
+plot(npp_mod_collect, ask = FALSE)
+
+
+##survey islands only
+npp_mod_surv <- 
+  brm(data = surv_env_dat, family = gaussian, 
+      npp ~ treatment_b  + (1|atoll),
+      prior = c(prior(normal(0,100), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(760,100), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "npp_mod_surv")
+print(npp_mod_surv) #absolutely no treatment effect
+pp_check(npp_mod_surv) #looks okay....
+plot(npp_mod_surv, ask = FALSE)
+
+
+
+###posterior plots
+npp_post_plot <-
+posterior_samples(npp_mod_surv) %>%
+  ggplot(aes(fill = stat(x < 0))) +
+    stat_halfeyeh(aes(y = 0, x = b_treatment_bratMfree), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+    stat_halfeyeh(data = posterior_samples(npp_mod_collect), aes( y = 1, x = b_treatment_bratMfree), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+    stat_halfeyeh(data = posterior_samples(npp_mod), aes( y = 2, x = b_treatment_bratMfree), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in NPP")+ 
+  ylab("") +
+  scale_y_continuous(breaks=c(0,1,2), labels= c("0" = "surveys", "1" = "collections", "2" = "all")) +
+# scale_x_continuous(limits=c(-4, 5), breaks=seq(-4, 5, 1))+
+  #scale_x_continuous(limits=c(-0.05, 0.25), breaks=seq(0, 0.25,.1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+npp_post_plot
+
+
+###95% HPDI and median estimates from posterior samples: 
+median_hdi(posterior_samples(npp_mod)$b_treatment_bratMfree) #3.769725	-38.89402	51.79413
+median_hdi(posterior_samples(npp_mod_collect)$b_treatment_bratMfree) #3.34926	-63.48763	72.4204	
+median_hdi(posterior_samples(npp_mod_surv)$b_treatment_bratMfree) #-2.671553	-57.67015	51.09454	
+
+
+```
+
+
+##run models - sst
+```{r}
+
+##all islands
+#raw data
+range(env_dat$sst) #28.85 29.26
+mean(env_dat$sst) # 29.10143
+median(env_dat$sst) #29.15
+
+
+sst_mod <- 
+  brm(data = env_dat, family = gaussian, 
+      sst ~ treatment_b  + (1|atoll),
+      prior = c(prior(normal(0,1), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(29,1), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "sst_mod") #1 divergent trans......
+print(sst_mod) # no treatment effect
+pp_check(sst_mod) #looks okay....
+plot(sst_mod, ask = FALSE)
+
+
+##collection islands only
+sst_mod_collect <- 
+  brm(data = collect_env_dat, family = gaussian, 
+      sst ~ treatment_b  + (1|atoll),
+       prior = c(prior(normal(0,10), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(29,10), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "sst_mod_collect")
+print(sst_mod_collect) #absolutely no treatment effect
+pp_check(sst_mod_collect) #looks okay....
+plot(sst_mod_collect, ask = FALSE)
+
+
+
+##survey islands only
+sst_mod_surv <- 
+  brm(data = surv_env_dat, family = gaussian, 
+      sst ~ treatment_b  + (1|atoll),
+        prior = c(prior(normal(0,10), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(29,10), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "sst_mod_surv")
+print(sst_mod_surv) # no treatment effect
+pp_check(sst_mod_surv) #looks okay....2 peaks
+plot(sst_mod_surv, ask = FALSE)
+
+
+
+##posterior plots
+sst_post_plot <-
+posterior_samples(sst_mod_surv) %>%
+  ggplot(aes(fill = stat(x < 0))) +
+    stat_halfeyeh(aes(y = 0, x = b_treatment_bratMfree), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+    stat_halfeyeh(data = posterior_samples(sst_mod_collect), aes( y = 1, x = b_treatment_bratMfree), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+    stat_halfeyeh(data = posterior_samples(sst_mod), aes( y = 2, x = b_treatment_bratMfree), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in SST")+ 
+  ylab("") +
+  scale_y_continuous(breaks=c(0,1,2), labels= c("0" = "surveys", "1" = "collections", "2" = "all")) +
+# scale_x_continuous(limits=c(-4, 5), breaks=seq(-4, 5, 1))+
+  #scale_x_continuous(limits=c(-0.05, 0.25), breaks=seq(0, 0.25,.1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+sst_post_plot
+
+
+
+###95% HPDI and median estimates from posterior samples: 
+median_hdi(posterior_samples(sst_mod)$b_treatment_bratMfree) #-0.03159276	-0.09921998	0.03777939	
+median_hdi(posterior_samples(sst_mod_collect)$b_treatment_bratMfree) #-0.04379978	-0.1494422	0.05635809	
+median_hdi(posterior_samples(sst_mod_surv)$b_treatment_bratMfree) #-0.02266315	-0.1071783	0.06528104		
+
+
+
+```
+
+
+##run models - island_area
+```{r}
+
+##all islands
+
+##need to log-transform, because otherwise getting negative area values for island size, which makes no sense: 
+
+#log dat
+range(env_dat$log_island_area) #2.079442 5.495117
+mean(env_dat$log_island_area) #3.500349
+median(env_dat$log_island_area) #3.248387
+
+island_area_mod_log <- 
+  brm(data = env_dat, family = gaussian, 
+      log_island_area ~ treatment_b  + (1|atoll),
+      prior = c(prior(normal(0,1), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(3.5,1), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "island_area_mod_log") 
+print(island_area_mod_log) #
+pp_check(island_area_mod_log) #looks good
+
+
+
+##collection islands only
+
+#log data
+island_area_mod_log_collect <- 
+  brm(data = collect_env_dat, family = gaussian, 
+      log_island_area ~ treatment_b  + (1|atoll),
+      prior = c(prior(normal(0,1), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(3.5,1), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "island_area_mod_log_collect") 
+print(island_area_mod_collect) #
+pp_check(island_area_mod_log_collect) #looks good
+
+
+
+##survey islands only
+#log data
+island_area_mod_log_surv <- 
+  brm(data = surv_env_dat, family = gaussian, 
+      log_island_area ~ treatment_b  + (1|atoll),
+     prior = c(prior(normal(0,1), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(3.5,1), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "island_area_mod_log_surv") 
+print(island_area_mod_surv) #
+pp_check(island_area_mod_log_surv) #looks good
+
+
+
+
+###posterior plots
+island_area_post_plot_log <-
+posterior_samples(island_area_mod_log_surv) %>%
+  ggplot(aes(fill = stat(x < 0))) +
+    stat_halfeyeh(aes(y = 0, x = b_treatment_bratMfree), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+    stat_halfeyeh(data = posterior_samples(island_area_mod_log_collect), aes( y = 1, x = b_treatment_bratMfree), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+    stat_halfeyeh(data = posterior_samples(island_area_mod_log), aes( y = 2, x = b_treatment_bratMfree), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in log island area")+ 
+  ylab("") +
+  scale_y_continuous(breaks=c(0,1,2), labels= c("0" = "surveys", "1" = "collections", "2" = "all")) +
+# scale_x_continuous(limits=c(-4, 5), breaks=seq(-4, 5, 1))+
+  #scale_x_continuous(limits=c(-0.05, 0.25), breaks=seq(0, 0.25,.1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+island_area_post_plot_log
+
+
+
+###95% HPDI and median estimates from posterior samples: 
+median_hdi(posterior_samples(island_area_mod_log)$b_treatment_bratMfree) #-0.6791932	-1.606364	0.2668487
+median_hdi(posterior_samples(island_area_mod_log_collect)$b_treatment_bratMfree) #-0.8690919	-2.085419	0.4798048		
+median_hdi(posterior_samples(island_area_mod_log_surv)$b_treatment_bratMfree) #-0.696848	-1.727339	0.4668128			
+
+
+
+```
+
+
+
+##run model - wave exposure
+```{r}
+
+##all islands
+#raw data
+range(env_dat$wave_energy) # 0.23 30.29
+mean(env_dat$wave_energy) # 10.01786
+median(env_dat$wave_energy) #0.445
+
+
+wave_mod <- 
+  brm(data = env_dat, family = gaussian, 
+      wave_energy ~ treatment_b  + (1|atoll),
+      prior = c(prior(normal(0,10), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(10,10), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "wave_mod")
+print(wave_mod) #absolutely no treatment effect
+pp_check(wave_mod) #looks okay....
+plot(wave_mod, ask = FALSE)
+
+
+
+##collection islands only
+wave_collect_mod <- 
+  brm(data = collect_env_dat, family = gaussian, 
+      wave_energy ~ treatment_b  + (1|atoll),
+      prior = c(prior(normal(0,10), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(10,10), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "wave_collect_mod")
+print(wave_collect_mod) #absolutely no treatment effect
+pp_check(wave_collect_mod) #looks okay....
+plot(wave_collect_mod, ask = FALSE)
+
+
+##survey islands only
+wave_mod_surv <- 
+  brm(data = surv_env_dat, family = gaussian, 
+      wave_energy ~ treatment_b  + (1|atoll),
+        prior = c(prior(normal(0,10), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(10,10), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "wave_mod_surv")
+print(wave_mod_surv) #
+pp_check(wave_mod_surv) #looks okay....
+plot(wave_mod_surv, ask = FALSE)
+
+
+###posterior plots
+wave_post_plot <-
+posterior_samples(wave_mod_surv) %>%
+  ggplot(aes(fill = stat(x < 0))) +
+    stat_halfeyeh(aes(y = 0, x = b_treatment_bratMfree), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+    stat_halfeyeh(data = posterior_samples(wave_collect_mod), aes( y = 1, x = b_treatment_bratMfree), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+    stat_halfeyeh(data = posterior_samples(wave_mod), aes( y = 2, x = b_treatment_bratMfree), point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in wave energy")+ 
+  ylab("") +
+  scale_y_continuous(breaks=c(0,1,2), labels= c("0" = "surveys", "1" = "collections", "2" = "all")) +
+# scale_x_continuous(limits=c(-4, 5), breaks=seq(-4, 5, 1))+
+  #scale_x_continuous(limits=c(-0.05, 0.25), breaks=seq(0, 0.25,.1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+wave_post_plot
+
+
+
+###95% HPDI and median estimates from posterior samples: 
+median_hdi(posterior_samples(wave_mod)$b_treatment_bratMfree) #3.008622	-6.511712	12.90645	
+median_hdi(posterior_samples(wave_collect_mod)$b_treatment_bratMfree) #-0.08944238	-0.7576224	0.6641369		
+median_hdi(posterior_samples(wave_mod_surv)$b_treatment_bratMfree) #3.541879	-7.625435	15.34187		
+
+
+
+```
+
+
+
+###combine plots for supplement
+```{r}
+
+
+env_post_comb_use<-plot_grid(island_area_post_plot_log, npp_post_plot, wave_post_plot, sst_post_plot, ncol = 2, align = "hv")
+env_post_comb_use
+
+
+
+ggsave(filename = "env_post_comb_use_25March.pdf", 
+       plot = env_post_comb_use,
+       width = 21, 
+       height = 15,
+       units = "cm",
+       dpi = 300,
+       family = "sans",
+       useDingbats=FALSE)
+
+
+```
+
+

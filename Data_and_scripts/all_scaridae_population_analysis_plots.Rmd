@@ -1,0 +1,459 @@
+---
+title: "R Notebook: Chlorurus survey analysis - 2020/04/14"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+#Step 0: Load packages
+```{r}
+library(tidyverse)
+library(brms)
+library(tidybayes)
+library(modelr) #for data_grid function
+library(bayesplot)
+library(gridExtra)
+library(cowplot) #for plots
+
+```
+
+
+#Step 1: Load data
+```{r}
+
+load("cso_surveys_data.Rdata")
+##contains fish_surveys, fish_surv_novm, cso_only, cso_only_2015, cso_only_2018, chl_only, chl_only_2015, chl_only_2018, scar_only, scar_only_2015, scar_only_2018, cso_only_sum, chl_only_sum, scar_only_sum
+
+##extend to all parrotfish (Scaridae) as comparison...
+str(scar_only_sum) #summed by transect, need to delete 2015
+
+
+scar_only_sum_2018<-
+  scar_only_sum  %>%
+  filter(Year == "2018")  %>%
+  droplevels()
+str(scar_only_sum_2018)
+
+##log response variables: 
+scar_only_sum_2018$lbio<-log(scar_only_sum_2018$sum_bio+1)
+scar_only_sum_2018$ldens<-log(scar_only_sum_2018$sum_dens+1)
+
+
+##Sum by reef 
+scar_only_reef_2018<-
+  scar_only_sum_2018  %>%
+  group_by(Atoll, Island, Treatment)  %>%
+  summarize(sum_bio_reef=sum(sum_bio),
+            sum_dens_reef = sum(sum_dens))
+str(scar_only_reef_2018)
+scar_only_reef_2018
+##None present at: GCB South Brother (no rats)
+
+
+###re-level so ratty is reference: 
+scar_only_sum_2018$treatment_b<-relevel(scar_only_sum_2018$Treatment, "Rats")
+
+
+###for size distributions, need non-aggregated data:
+###re-level for birdy effect: 
+scar_only_2018$treatment_b<-relevel(scar_only_2018$Treatment, "Rats")
+scar_only_2018$llength<-log(scar_only_2018$Length)
+
+```
+
+##Biomass models
+```{r}
+scar_biomass_mod <- 
+  brm(data = scar_only_sum_2018, family = hurdle_gamma(link="log"), #hurdle because quite a few zeros, gamma fits continuous non-negative data
+      sum_bio  ~ treatment_b  + (1|Atoll),
+      prior = c(prior(normal(0,1), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(0,1), class = "Intercept")), ##weakly informative
+      iter = 5000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.9999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "scar_biomass_mod")
+print(scar_biomass_mod) ##no divergent transitions
+plot(scar_biomass_mod)
+pp_check(scar_biomass_mod) 
+pairs(scar_biomass_mod)
+##looks good
+
+#check plots of  posterior versus prior distributions: 
+#intercept:
+posterior_samples(scar_biomass_mod) %>% 
+  select(b_Intercept, prior_b) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope:
+posterior_samples(scar_biomass_mod) %>% 
+  select(b_treatment_bNo_rats, prior_b) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#Compile posterior distributions:
+scar_biomass_post <- posterior_samples(scar_biomass_mod)
+median_hdi(scar_biomass_post$b_treatment_bNo_rats, .width = .95) #median estimate = 0.43, ymin = -0.09, ymax = 0.99
+
+
+#test hypothesis that birdy effect is > 0
+hypothesis(scar_biomass_mod, "treatment_bNo_rats>0") 
+#evidence ratio = 17.2, posterior probability = 0.95 - so strong evidence for positive birdy effect on biomass
+
+```
+
+
+
+###Density
+```{r}
+scar_density_mod <- 
+  brm(data = scar_only_sum_2018, family = hurdle_gamma(link="log"),
+      sum_dens  ~ treatment_b  + (1|Atoll),
+      prior = c(prior(normal(0,1), class = "b"),
+                prior(normal(0,1), class = "Intercept")),
+      iter = 5000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "scar_density_mod")
+print(scar_density_mod)
+plot(scar_density_mod) 
+pp_check(scar_density_mod)
+pairs(scar_density_mod)
+##all looks okay
+prior_summary(scar_density_mod)
+#check plots of  posterior versus prior distributions: 
+
+#intercept:
+posterior_samples(scar_density_mod) %>% 
+  select(b_Intercept, prior_b) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope:
+posterior_samples(scar_density_mod) %>% 
+  select(b_treatment_bNo_rats, prior_b) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#Compile posterior distributions:
+scar_density_post <- posterior_samples(scar_density_mod)
+median_hdi(scar_density_post$b_treatment_bNo_rats, .width = .95) #median estimate = -0.20, ymin = -0.77, ymax = 0.36
+
+
+#test hypothesis that birdy effect is > 0
+hypothesis(scar_density_mod, "treatment_bNo_rats>0") 
+#evidence ratio = 0.34, posterior probability = 0.25
+
+```
+
+
+##Plot: boxplots of raw data
+```{r}
+scar_bio_boxplot_no0<-
+  scar_only_sum_2018 %>% 
+  filter(sum_bio>0)%>% ##exclude zeros because hurdl emodel
+  mutate(Treatment = factor(Treatment, levels=c("Rats", "No_rats")))  %>% #re-arrange to match posterior plots
+  ggplot(aes(x=Treatment, y=sum_bio, fill=Treatment, alpha = 0.6, shape = Treatment)) + 
+  geom_boxplot(outlier.size=0, outlier.stroke=0) +
+  geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.1)) + 
+  scale_fill_manual(values = c("#DC3220", "#005AB5"))+
+  scale_shape_manual(values = c(23,21)) + 
+  scale_x_discrete(labels=c("rat-infested", "rat-free")) +
+  scale_y_continuous(trans='log10')+ #plot on log scale because log link in model #, limits=c(0, 1000)
+  theme_bw() + 
+  xlab(" ")+
+  ylab("Biomass (kg/ha)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+scar_bio_boxplot_no0
+  
+
+
+
+scar_dens_boxplot_no0<-
+  scar_only_sum_2018 %>% 
+  filter(sum_dens>0)%>% ##exclude zeros because hurdle model
+  mutate(Treatment = factor(Treatment, levels=c("Rats", "No_rats")))  %>% #re-arrange to match posterior plots
+  ggplot(aes(x=Treatment, y=sum_dens, fill=Treatment, alpha = 0.6, shape = Treatment)) + 
+  geom_boxplot(outlier.size=0, outlier.stroke=0) +
+  geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.1)) + 
+  scale_fill_manual(values = c("#DC3220", "#005AB5"))+
+  scale_shape_manual(values = c(23,21)) + 
+  scale_x_discrete(labels=c("rat-infested", "rat-free")) +
+  scale_y_continuous(trans='log10')+ #plot on log scale because log link in model
+  theme_bw() + 
+  xlab(" ")+
+  ylab("Density (ind/ha)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+scar_dens_boxplot_no0
+
+
+nrow(scar_only_sum_2018[scar_only_sum_2018$Treatment=="Rats"&scar_only_sum_2018$sum_dens>0,]) ##20
+nrow(scar_only_sum_2018[scar_only_sum_2018$Treatment=="Rats",]) ##24
+nrow(scar_only_sum_2018[scar_only_sum_2018$Treatment=="Rats"&scar_only_sum_2018$sum_dens==0,]) ##4
+
+nrow(scar_only_sum_2018[scar_only_sum_2018$Treatment=="No_rats"&scar_only_sum_2018$sum_dens>0,]) ##13
+nrow(scar_only_sum_2018[scar_only_sum_2018$Treatment=="No_rats",]) ##20
+nrow(scar_only_sum_2018[scar_only_sum_2018$Treatment=="No_rats"&scar_only_sum_2018$sum_dens==0,]) ##7
+
+
+
+```
+
+
+##Models: size distributions
+```{r}
+###need to run skew_normal model because looks like distributions skewed in differen ways: 
+
+###just re-run one before with more iterations:
+all_scar_size_mod_skew<- 
+ brm(bf(Length ~ treatment_b + (1|Atoll), # 
+        alpha~treatment_b),
+        data = scar_only_2018, family = skew_normal(),
+        iter = 5000, warmup = 1000, chains = 4, cores = 4,
+        prior = c(prior(normal(23,10), class = "Intercept"), #weakly informative prior based on mean length
+                prior(normal(0,10), class = "b")), #weakly informative - allow any bird-rat effect
+      control = list(adapt_delta = 0.9999, max_treedepth = 20),
+           sample_prior="yes",
+      file = "all_scar_size_mod_skew") ###2 divergent transitions, but ESS OKAY :) 
+pp_check(all_scar_size_mod_skew)
+print(all_scar_size_mod_skew) ##these estimates make a lot more sense....
+plot(all_scar_size_mod_skew, ask = FALSE)
+prior_summary(all_scar_size_mod_skew)
+
+
+#intercept:
+posterior_samples(all_scar_size_mod_skew) %>% 
+  select(b_Intercept, prior_Intercept) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope:
+posterior_samples(all_scar_size_mod_skew) %>% 
+  select(b_treatment_bNo_rats, prior_b) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+
+#intercept:
+posterior_samples(all_scar_size_mod_skew) %>% 
+  select(b_alpha_Intercept, prior_Intercept_alpha) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+#slope:
+posterior_samples(all_scar_size_mod_skew) %>% 
+  select(b_alpha_treatment_bNo_rats, prior_b) %>% 
+  gather(Type, value) %>% 
+    ggplot(aes(value, col=Type)) +
+    geom_density()
+
+
+#Compile posterior distributions:
+scar_size_post <- posterior_samples(all_scar_size_mod_skew)
+median_hdi(scar_size_post$b_treatment_bNo_rats, .width = .95) #median estimate = 5.705916, ymin = 3.038131, ymax = 8.215461
+median_hdi(scar_size_post$b_alpha_treatment_bNo_rats, .width = .95) #median estimate = -17.63993, ymin = -27.448, ymax = -9.794223
+
+
+##so, definitely an effect of birds on both the mean and skew of size distribution
+hypothesis(all_scar_size_mod_skew, c("treatment_bNo_rats > 0",  ##evidence ratio - 5332.33, posterior prob = 1.00
+                                    "alpha_treatment_bNo_rats < 0")) ###ER = 152.85	posterior prob = 0.99
+```
+
+
+
+#Posterior plots
+```{r}
+##Biomass
+scar_bio_post_plot<-
+scar_biomass_mod %>%
+  spread_draws(b_treatment_bNo_rats) %>%
+ # mutate(exp_b=exp(b_treatment_bNo_rats))%>%
+  ggplot(aes(y = 0, x = b_treatment_bNo_rats, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in biomass")+
+  ylab("Posterior density") +
+  scale_x_continuous(limits=c(-1.3, 2), breaks=seq(-1, 2,1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+          axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+scar_bio_post_plot
+
+
+
+scar_dens_post_plot<-
+scar_density_mod %>%
+  spread_draws(b_treatment_bNo_rats) %>%
+ # mutate(exp_b=exp(b_treatment_bNo_rats))%>%
+  ggplot(aes(y = 0, x = b_treatment_bNo_rats, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in density")+
+  ylab("Posterior density") +
+  scale_x_continuous(limits=c(-1.3, 2), breaks=seq(-1, 2,1))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+          axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+scar_dens_post_plot
+
+##size
+scar_size_post_plot<-
+all_scar_size_mod_skew %>%
+  spread_draws(b_treatment_bNo_rats) %>%
+ # mutate(exp_b=exp(b_treatment_bNo_rats))%>%
+  ggplot(aes(y = 0, x = b_treatment_bNo_rats, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in length")+
+  ylab("Posterior density") +
+  scale_x_continuous(breaks=seq(0, 10,2))+
+ # scale_x_continuous(limits=c(-.5, .5), breaks=seq(-.5, .5,.25))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+          axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+scar_size_post_plot
+
+```
+
+
+##Size histogram plot
+```{r}
+##get mean size per treatment to plot: 
+scar_groupmean<-
+  scar_only_2018%>%
+  group_by(Treatment) %>%
+  summarize(mean_size = mean(Length))
+
+##histogram: 
+scar_size_hist<-
+ggplot(scar_only_2018, aes(x=Length, fill = Treatment)) + 
+  geom_histogram(aes(y= ..density..), position="identity", binwidth = 2.5) + 
+  geom_vline(data=scar_groupmean, aes(xintercept=mean_size, color =Treatment, alpha = 0.9), linetype = "dashed") +
+    scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"), 0.6))+
+    scale_colour_manual(values = c("#005AB5", "#DC3220"))+
+   scale_y_continuous(expand = c(0, 0), limits = c(0, 0.1), breaks=seq(0,0.1,0.05))+ 
+   scale_x_continuous( breaks=seq(5,55,10))+ 
+  xlab("Length (cm)")+
+  ylab("Density")+
+   theme_bw() + 
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+
+scar_size_hist
+
+```
+
+
+
+
+####combine plots - density, biomass, size:
+```{r}
+##need to align boxplots, because different widths (because different decimal places in y-axis)
+scar_aligned_survey_plot<-plot_grid(scar_dens_boxplot_no0, scar_dens_post_plot, scar_bio_boxplot_no0, scar_bio_post_plot, scar_size_hist, 
+                    scar_size_post_plot, 
+                    ncol = 2, align = c("v", "h"))
+scar_aligned_survey_plot
+
+
+ggsave(filename = "dens_bio_size_plot_comb_scar_25March.pdf", 
+       plot = scar_aligned_survey_plot,
+       width = 17, 
+       height = 17,
+       units = "cm",
+       dpi = 300,
+       family = "sans",
+       useDingbats=FALSE)
+
+
+####alternative:
+scar_dens_plot <-
+  ggdraw() + 
+  draw_plot(scar_dens_boxplot_no0, x = 0, y = 0, width = 0.55, height = 1) +
+  draw_plot(scar_dens_post_plot,  x = 0.55, y = 0, width = 0.45, height = 1) 
+scar_dens_plot
+
+scar_bio_plot <-
+  ggdraw() + 
+  draw_plot(scar_bio_boxplot_no0, x = 0, y = 0, width = 0.55, height = 1) +
+  draw_plot(scar_bio_post_plot,  x = 0.55, y = 0, width = 0.45, height = 1) 
+scar_bio_plot
+
+scar_size_plot <-
+  ggdraw() + 
+  draw_plot(scar_size_hist, x = 0, y = 0, width = 0.55, height = 1) +
+  draw_plot(scar_size_post_plot,  x = 0.55, y = 0, width = 0.45, height = 1) 
+scar_size_plot
+
+
+scar_aligned_survey_plot<-plot_grid(scar_dens_plot, scar_bio_plot, scar_size_plot, 
+                    ncol = 1, align = c("v", "h"))
+scar_aligned_survey_plot
+
+
+
+ggsave(filename = "dens_bio_size_plot_comb_scar3b.pdf", 
+       plot = scar_aligned_survey_plot,
+       width = 20, 
+       height = 20,
+       units = "cm",
+       dpi = 300,
+       family = "sans",
+       useDingbats=FALSE)
+###THIS WORKS WELL***
+
+```
+
+
+

@@ -1,0 +1,344 @@
+---
+title: "R Notebook - seabirds"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+
+###load packages
+```{r}
+library(tidyverse)
+library(brms)
+library(tidybayes)
+library(modelr) #for data_grid function
+library(bayesplot)
+library(gridExtra) #for plots
+library(RColorBrewer) #for plots
+library(cowplot) #for plots
+library(scales) #for plots
+```
+
+
+
+
+##load data
+```{r}
+env_dat<-read.csv("seabird_island_dat_final.csv")
+
+str(env_dat)
+
+
+##re-level rat_status:
+env_dat<-
+env_dat%>%
+  mutate(treatment_b=relevel(rat_status, "rat-infested"))
+
+##log seabird density
+env_dat<-
+env_dat%>%
+  mutate(log_seabird=log(seabird_bp_density))
+env_dat
+
+```
+
+
+##run model - seabird density
+```{r}
+range(env_dat$seabird_bp_density) #0.15 4034.38
+mean(env_dat$seabird_bp_density) #678.0393
+median(env_dat$seabird_bp_density) #3.045
+
+##log model is best: 
+seabird_bp_dens_log_mod <- 
+  brm(data = env_dat, family = gaussian, 
+      log_seabird ~ treatment_b  + (1|atoll),
+      prior = c(prior(normal(0,10), class = "b"), ##weakly informative - allows any sort of bird/rat effect
+                prior(normal(2,10), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "seabird_bp_dens_log_mod")
+print(seabird_bp_dens_log_mod) #no rats> rats - this looks more accurate***
+pp_check(seabird_bp_dens_log_mod) #looks good
+
+hypothesis(seabird_bp_dens_log_mod, "treatment_bratMfree>0") #1.0
+
+
+seabird_post<-posterior_samples(seabird_bp_dens_log_mod)
+median_hdi(seabird_post$b_treatment_bratMfree, .width = .95) #6.670152	4.921651	8.441486	
+median_hdi(exp(seabird_post$b_treatment_bratMfree), .width = .95) #788.5157	30.70026	3307.336
+median_hdi(exp(seabird_post$b_Intercept), .width = .95) #ratty island population size = 0.8461396	(7.493264e-05	3.773845)	
+median_hdi(exp(seabird_post$b_Intercept + seabird_post$b_treatment_bratMfree), .width = .95) #birdy island bp/hectare = 670.9207	(0.2229462	3202.932)
+
+
+```
+
+
+###collection and survey reefs only to see if trends hold
+```{r}
+
+##collection reefs:
+collect_env_dat<-
+env_dat %>% 
+  filter(collections=="X")
+
+seabird_bp_dens_log_mod_collect_only <- 
+  brm(data = collect_env_dat, family = gaussian, 
+     log_seabird ~ treatment_b  + (1|atoll),
+      prior = c(prior(normal(0,10), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(2,10), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "seabird_bp_dens_log_mod_collect_only")
+print(seabird_bp_dens_log_mod_collect_only) #no rats> rats
+pp_check(seabird_bp_dens_log_mod_collect_only) #looks okay
+plot(seabird_bp_dens_log_mod_collect_only, ask = FALSE)
+
+hypothesis(seabird_bp_dens_log_mod_collect_only, "treatment_bratMfree>0") #1.0
+
+median_hdi(posterior_samples(seabird_bp_dens_log_mod_collect_only)$b_treatment_bratMfree, .width = .95) #6.78809	3.824545	9.597065	
+
+
+##survey reefs:
+surv_env_dat<-
+env_dat %>% 
+  filter(surveys=="X")
+
+seabird_bp_dens_log_mod_survey_only <- 
+  brm(data = surv_env_dat, family = gaussian, 
+       log_seabird ~ treatment_b  + (1|atoll),
+      prior = c(prior(normal(0,10), class = "b"), ##weakly informative - allows any sort of bird/rat effect (sd = 1 because log link)
+                prior(normal(2,10), class = "Intercept")), ##weakly informative
+      iter = 3000, warmup = 1000, chains = 4, cores = 4, 
+      control = list(adapt_delta = 0.999, max_treedepth = 15), 
+      sample_prior="yes",
+      file = "seabird_bp_dens_log_mod_survey_only")
+print(seabird_bp_dens_log_mod_survey_only) #no rats> rats 
+pp_check(seabird_bp_dens_log_mod_survey_only) #looks okay
+
+hypothesis(seabird_bp_dens_log_mod_survey_only, "treatment_bratMfree>0") #1.0
+
+median_hdi(posterior_samples(seabird_bp_dens_log_mod_survey_only)$b_treatment_bratMfree, .width = .95) #6.516451	4.055101	9.063979	
+
+
+```
+
+
+
+
+##boxplot - all reefs for main paper, compare to just collection and survey reefs in supplement PLUS posterior dist
+```{r}
+seabird_box_all<-
+ env_dat %>% 
+  mutate(rat_status = factor(rat_status, levels=c("rat-infested", "rat-free")))  %>% #re-arrange to match posterior plots
+  #filter(sum_bio>0)%>% ##exclude zeros because hurdl emodel
+  ggplot(aes(x=rat_status, y=seabird_bp_density, fill=rat_status, shape = rat_status, alpha = 0.6)) + 
+  geom_boxplot(outlier.size=0, outlier.stroke=0) +
+  geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.1)) + 
+  scale_fill_manual(values = c("#DC3220", "#005AB5"))+
+  scale_shape_manual(values = c(23,21)) + 
+ #scale_x_discrete(labels=c("rat-infested", "rat-free")) +
+  scale_y_continuous(trans='log10', labels = scales::number_format(accuracy=1))+ #plot on log scale because log link in model #, limits=c(0, 1000)
+  theme_bw() + 
+  xlab(" ")+
+  ylab("Density (# breeding pairs/ha)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+seabird_box_all
+
+
+seabird_box_all_nl<-
+ env_dat %>% 
+  mutate(rat_status = factor(rat_status, levels=c("rat-infested", "rat-free")))  %>% #re-arrange to match posterior plots
+  #filter(sum_bio>0)%>% ##exclude zeros because hurdl emodel
+  ggplot(aes(x=rat_status, y=seabird_bp_density, fill=rat_status, shape = rat_status, alpha = 0.6)) + 
+  geom_boxplot(outlier.size=0, outlier.stroke=0) +
+  geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.1)) + 
+  scale_fill_manual(values = c("#DC3220", "#005AB5"))+
+  scale_shape_manual(values = c(23,21)) + 
+ #scale_x_discrete(labels=c("rat-infested", "rat-free")) +
+  #scale_y_continuous(trans='log10', labels = scales::number_format(accuracy=1))+ #plot on log scale because log link in model #, limits=c(0, 1000)
+  theme_bw() + 
+  xlab(" ")+
+  ylab("Seabird density (# breeding pairs/ha)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+seabird_box_all_nl
+
+
+##posterior plots
+seabird_post_plot<-
+  seabird_bp_dens_log_mod %>%
+  spread_draws(b_treatment_bratMfree) %>%
+ # mutate(exp_b=exp(b_treatment_bratMfree))%>%
+  ggplot(aes(y = 0, x = b_treatment_bratMfree, fill = stat(x < 0))) +
+  stat_halfeyeh(point_interval=median_hdi, .width=c(.95, .75), fatten_point = 2, slab_alpha = 0.6) +
+  scale_fill_manual(values = alpha(c("#005AB5", "#DC3220"),0.3))+
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  theme_bw() + 
+  xlab("Difference in log seabird density")+
+  ylab("Posterior density") +
+  scale_y_continuous(breaks = NULL) +
+      scale_x_continuous(limits=c(-2, 10.9), breaks=seq(-2, 10,2))+
+ # scale_x_continuous(limits=c(-2, 6), breaks=seq(-2, 6,2))+
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+seabird_post_plot
+
+```
+
+
+###combine plots with other files for figure 3:
+```{r}
+
+####new combined:
+aligned_raw_plots_env<-plot_grid(seabird_box_all_nl, Nperc_box, pisc_bio_box_all, ncol = 1, align = "hv")
+aligned_raw_plots_env
+
+aligned_post_env<-plot_grid(seabird_post_plot, Nperc_post_plot, pisc_bio_post_plot, ncol = 1, align = "hv")
+aligned_post_env
+
+
+comb_plot_pop <-
+  ggdraw() + 
+  draw_plot(aligned_raw_plots_env, x = 0, y = 0, width = 0.5, height = 1) + # draw_plot(aligned_raw_plots, x = 0, y = 0, width = 0.55, height = 1)
+  draw_plot(aligned_post_env,  x = 0.5, y = 0, width = 0.5, height = 1) #  draw_plot(post_plots,  x = 0.55, y = 0, width = 0.45, height = 1) 
+comb_plot_pop
+
+
+ggsave(filename = "fig3_env_March25.pdf", 
+       plot = comb_plot_pop,
+       width = 20, 
+       height = 20,
+       units = "cm",
+       dpi = 300,
+       family = "sans",
+       useDingbats=FALSE)
+
+
+```
+
+
+
+
+##boxplots for supplement
+```{r}
+
+seabird_box_all_supp<-
+ env_dat %>% 
+  mutate(rat_status = factor(rat_status, levels=c("rat-infested", "rat-free")))  %>% #re-arrange to match posterior plots
+  #filter(sum_bio>0)%>% ##exclude zeros because hurdl emodel
+  ggplot(aes(x=rat_status, y=seabird_bp_density, fill=rat_status, shape = rat_status, alpha = 0.6)) + 
+  geom_boxplot(outlier.size=0, outlier.stroke=0) +
+  geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.1)) + 
+  scale_fill_manual(values = c("#DC3220", "#005AB5"))+
+  scale_shape_manual(values = c(23,21)) + 
+ #scale_x_discrete(labels=c("rat-infested", "rat-free")) +
+#  scale_y_log10(limits = c(0.1,4100), breaks=c(0,1, 10, 100, 1000))+
+  theme_bw() + 
+  xlab(" ")+
+  ylab("Density (# breeding pairs/ha)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+seabird_box_all_supp
+
+
+
+##collection sites only
+seabird_collect_box_supp<-
+env_dat %>% 
+  filter(collections=="X")%>% 
+  mutate(rat_status = factor(rat_status, levels=c("rat-infested", "rat-free")))  %>% #re-arrange to match posterior plots
+ ggplot(aes(x=rat_status, y=seabird_bp_density, fill=rat_status, shape = rat_status, alpha = 0.6)) + 
+  geom_boxplot(outlier.size=0, outlier.stroke=0) +
+  geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.1)) + 
+ # geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.1)) + 
+  scale_fill_manual(values = c("#DC3220", "#005AB5"))+
+  scale_shape_manual(values = c(23,21)) + 
+ #scale_x_discrete(labels=c("rat-infested", "rat-free")) +
+  scale_y_log10(limits = c(0.1,4100), breaks=c(0,1, 10, 100, 1000))+
+# scale_y_continuous(trans='log10',  labels = scales::number_format(accuracy=10))+ #plot on log scale because log link in model #, limits=c(0, 1000)
+  theme_bw() + #breaks=seq(0,4000,1000),limits = c(0.01,4100), 
+  xlab(" ")+
+   ylab("Density (# breeding pairs/ha)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+seabird_collect_box_supp
+
+
+###survey sites only
+seabird_survey_box_supp<-
+env_dat %>% 
+  filter(surveys=="X")%>% 
+    mutate(rat_status = factor(rat_status, levels=c("rat-infested", "rat-free")))  %>% #re-arrange to match posterior plots
+  ggplot(aes(x=rat_status, y=seabird_bp_density, fill=rat_status, shape = rat_status, alpha = 0.6)) + 
+  geom_boxplot(outlier.size=0, outlier.stroke=0) +
+  geom_point(stat="identity", size = 2, position = position_jitterdodge(dodge.width=.1)) + 
+  scale_fill_manual(values = c("#DC3220", "#005AB5"))+
+  scale_shape_manual(values = c(23,21)) + 
+  scale_y_log10(limits = c(0.1,4100), breaks=c(0,1, 10, 100, 1000))+
+ #scale_x_discrete(labels=c("rat-infested", "rat-free")) +
+  #scale_y_continuous(trans='log10')+ #plot on log scale because log link in model #, limits=c(0, 1000)
+  theme_bw() + 
+  xlab(" ")+
+  ylab("Density (# breeding pairs/ha)") +
+  theme(panel.grid.major = element_blank(), # remove gridlines
+        panel.grid.minor = element_blank(), #remove gridlines
+        strip.background = element_blank(), 
+        legend.position = "none",  
+        rect = element_rect(fill = "transparent"),  
+        plot.background = element_rect(fill = "transparent", color = NA),
+        text=element_text(size=16,  family="sans"),
+        axis.text.x = element_text(size=16))
+seabird_survey_box_supp
+
+
+##combine and export:
+
+####combine these into one:
+sb_plots_comb_supp<-plot_grid(seabird_box_all_supp, seabird_collect_box_supp, seabird_survey_box_supp, ncol = 3, align = "hv")
+sb_plots_comb_supp
+
+ggsave(filename = "sb_plots_comb_supp_02march.pdf", 
+       plot = sb_plots_comb_supp,
+       width = 25, 
+       height = 10,
+       units = "cm",
+       dpi = 300,
+       family = "sans",
+       useDingbats=FALSE)
+
+```
