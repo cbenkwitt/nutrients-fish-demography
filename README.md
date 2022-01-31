@@ -1,5 +1,5 @@
 # nutrients-fish-demography
-Data and code for "Natural nutrient subsidies alter demographic trade-offs in coral-reef fish" by Benkwitt, Taylor, Meekan, Graham. Submitted to Journal of Animal Ecology 2020.
+Data and code for "Natural nutrient subsidies alter demographic trade-offs in a functionally important coral-reef fish" by Benkwitt CE, Taylor BM, Meekan MG, Graham NAG. 2021. Scientific Reports 11:12575.
 
 Contains all data (.csv and .Rdata files), scripts for analysis (.R and .Rmd files), and Bayesian models (.Rds files). 
 
